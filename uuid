@@ -1,1 +1,0 @@
-'First user UUID: ' . \$user- . PHP_EOL;

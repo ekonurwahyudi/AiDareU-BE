@@ -87,11 +87,11 @@ echo.
 echo Sample Store: contoh-toko.aidaru.com
 echo.
 echo API Endpoints available at:
-echo - http://localhost:8000/api/auth/register
-echo - http://localhost:8000/api/auth/login
-echo - http://localhost:8000/api/rbac/*
-echo - http://localhost:8000/api/stores/*
+echo - http://localhost:8080/api/auth/register
+echo - http://localhost:8080/api/auth/login
+echo - http://localhost:8080/api/rbac/*
+echo - http://localhost:8080/api/stores/*
 echo.
-echo To start the server, run: php artisan serve
+echo To start the server, run: php artisan serve --port=8080
 echo.
 pause

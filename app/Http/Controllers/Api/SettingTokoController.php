@@ -41,22 +41,22 @@ class SettingTokoController extends Controller
                 if ($slideData->slide_1) {
                     $slides[] = [
                         'id' => 1,
-                        'gambar_slide' => 'http://localhost:8000/storage/' . $slideData->slide_1,
-                        'image' => 'http://localhost:8000/storage/' . $slideData->slide_1
+                        'gambar_slide' => url('storage/' . $slideData->slide_1),
+                        'image' => url('storage/' . $slideData->slide_1)
                     ];
                 }
                 if ($slideData->slide_2) {
                     $slides[] = [
                         'id' => 2,
-                        'gambar_slide' => 'http://localhost:8000/storage/' . $slideData->slide_2,
-                        'image' => 'http://localhost:8000/storage/' . $slideData->slide_2
+                        'gambar_slide' => url('storage/' . $slideData->slide_2),
+                        'image' => url('storage/' . $slideData->slide_2)
                     ];
                 }
                 if ($slideData->slide_3) {
                     $slides[] = [
                         'id' => 3,
-                        'gambar_slide' => 'http://localhost:8000/storage/' . $slideData->slide_3,
-                        'image' => 'http://localhost:8000/storage/' . $slideData->slide_3
+                        'gambar_slide' => url('storage/' . $slideData->slide_3),
+                        'image' => url('storage/' . $slideData->slide_3)
                     ];
                 }
             }
@@ -92,7 +92,7 @@ class SettingTokoController extends Controller
                         'salePrice' => $product->harga_diskon ? (float) $product->harga_diskon : null,
                         'rating' => 4.9,
                         'reviews' => 0,
-                        'image' => $firstImage ? 'http://localhost:8000/storage/' . $firstImage : '/placeholder.jpg',
+                        'image' => $firstImage ? url('storage/' . $firstImage) : '/placeholder.jpg',
                         'isNew' => $product->created_at->diffInDays(now()) <= 30,
                         'inStock' => ($product->stock ?? 0) > 0,
                         'storeUuid' => $product->uuid_store,
