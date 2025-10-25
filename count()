@@ -1,0 +1,1 @@
+'Stores for this user: ' . \$userStores- . PHP_EOL;

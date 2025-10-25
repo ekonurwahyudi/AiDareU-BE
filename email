@@ -1,0 +1,1 @@
+'First user email: ' . \$user- . PHP_EOL;
