@@ -22,6 +22,16 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\ProductDigitalController;
 use App\Http\Controllers\Api\NotificationController;
 
+// Health check endpoint for monitoring
+Route::get('/health', function () {
+    return response()->json([
+        'status' => 'ok',
+        'message' => 'API is working!',
+        'timestamp' => now()->toIso8601String(),
+        'version' => '1.0.0'
+    ]);
+});
+
 // Test endpoint
 Route::get('/test', function () {
     return response()->json(['message' => 'API is working!']);
