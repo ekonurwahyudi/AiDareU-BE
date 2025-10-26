@@ -74,7 +74,7 @@ class AuthController extends Controller
                     'uuid' => $user->uuid,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'phone' => $user->phone
+                    'phone' => $user->no_hp
                 ]
             ], 201);
 
@@ -296,7 +296,7 @@ class AuthController extends Controller
                 'uuid' => $user->uuid,
                 'name' => $user->name,
                 'email' => $user->email,
-                'phone' => $user->phone,
+                'phone' => $user->no_hp,
                 'roles' => $user->getRoleNames(),
                 'store' => $store ? [
                     'uuid' => $store->uuid,
@@ -515,7 +515,7 @@ class AuthController extends Controller
                     'uuid' => $user->uuid,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'phone' => $user->phone,
+                    'phone' => $user->no_hp,
                     'email_verified_at' => $user->email_verified_at,
                     'roles' => $user->getRoleNames(),
                     'permissions' => $user->getAllPermissions()->pluck('name')
