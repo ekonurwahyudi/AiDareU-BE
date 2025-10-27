@@ -182,8 +182,8 @@ class SettingTokoController extends Controller
                 'site_title' => 'nullable|string|max:255',
                 'site_tagline' => 'nullable|string|max:255',
                 'primary_color' => 'nullable|string|max:7',
-                'logo' => 'nullable|image|mimes:jpeg,jpg,png,gif|max:2048',
-                'favicon' => 'nullable|image|mimes:jpeg,jpg,png,gif,ico|max:512',
+                'logo' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:2048',
+                'favicon' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp,ico|max:512',
                 'delete_logo' => 'nullable|string',
             ]);
 
@@ -257,9 +257,9 @@ class SettingTokoController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'uuid_store' => 'required|exists:stores,uuid',
-                'slide_1' => 'nullable|image|mimes:jpeg,jpg,png,gif|max:2048',
-                'slide_2' => 'nullable|image|mimes:jpeg,jpg,png,gif|max:2048',
-                'slide_3' => 'nullable|image|mimes:jpeg,jpg,png,gif|max:2048',
+                'slide_1' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:2048',
+                'slide_2' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:2048',
+                'slide_3' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:2048',
             ]);
 
             if ($validator->fails()) {
@@ -519,7 +519,7 @@ class SettingTokoController extends Controller
                 'keyword' => 'nullable|string',
                 'og_title' => 'nullable|string|max:255',
                 'og_deskripsi' => 'nullable|string',
-                'og_image' => 'nullable|image|mimes:jpeg,jpg,png,gif|max:2048',
+                'og_image' => 'nullable|image|mimes:jpeg,jpg,png,gif,webp|max:2048',
             ]);
 
             if ($validator->fails()) {
