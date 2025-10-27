@@ -231,24 +231,80 @@ class StoreController extends Controller
     public function index(Request $request)
     {
         try {
+            // Check if querying by domain or subdomain
+            $domain = $request->query('domain');
+            $subdomain = $request->query('subdomain');
+
+            if ($domain) {
+                // Public query by custom domain
+                $store = Store::where('domain', $domain)
+                             ->where('is_active', true)
+                             ->first();
+
+                if (!$store) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Store not found'
+                    ], 404);
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'uuid' => $store->uuid,
+                        'name' => $store->name,
+                        'subdomain' => $store->subdomain,
+                        'domain' => $store->domain,
+                        'url' => $store->domain
+                            ? 'https://' . $store->domain
+                            : 'https://' . $store->subdomain . '.aidareu.com'
+                    ]
+                ]);
+            }
+
+            if ($subdomain) {
+                // Public query by subdomain
+                $store = Store::where('subdomain', $subdomain)
+                             ->where('is_active', true)
+                             ->first();
+
+                if (!$store) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Store not found'
+                    ], 404);
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'uuid' => $store->uuid,
+                        'name' => $store->name,
+                        'subdomain' => $store->subdomain,
+                        'domain' => $store->domain
+                    ]
+                ]);
+            }
+
+            // Default: Get user's stores (authenticated)
             $user = Auth::user();
-            
+
             if (!$user) {
                 // Try to get user from session if available
                 $user = auth('web')->user();
-                
+
                 if (!$user) {
                     // For development/testing - try to find the specific user by UUID
                     $targetUuid = 'e4fcfcba-63bc-41ff-a36c-11c6e57d16f8'; // Your login UUID
                     $user = User::where('uuid', $targetUuid)->first();
-                    
+
                     if (!$user) {
                         // Fallback to first user from database
                         $user = User::first();
                     }
                 }
             }
-            
+
             $stores = Store::where('user_id', $user->uuid)
                           ->orderBy('created_at', 'desc')
                           ->get()
