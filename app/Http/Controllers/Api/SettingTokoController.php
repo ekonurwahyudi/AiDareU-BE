@@ -237,6 +237,16 @@ class SettingTokoController extends Controller
                 $data
             );
 
+            // Refresh storage symlink to fix Docker volume sync issues
+            if ($request->hasFile('logo') || $request->hasFile('favicon')) {
+                try {
+                    \Artisan::call('storage:link', ['--force' => true]);
+                } catch (\Exception $e) {
+                    // Silently fail if symlink can't be created
+                    \Log::warning('Failed to refresh storage symlink: ' . $e->getMessage());
+                }
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'General settings updated successfully',
@@ -285,6 +295,15 @@ class SettingTokoController extends Controller
                 ['uuid_store' => $request->uuid_store],
                 $data
             );
+
+            // Refresh storage symlink to fix Docker volume sync issues
+            if ($request->hasFile('slide_1') || $request->hasFile('slide_2') || $request->hasFile('slide_3')) {
+                try {
+                    \Artisan::call('storage:link', ['--force' => true]);
+                } catch (\Exception $e) {
+                    \Log::warning('Failed to refresh storage symlink: ' . $e->getMessage());
+                }
+            }
 
             return response()->json([
                 'success' => true,
