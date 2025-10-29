@@ -120,7 +120,16 @@ class UserController extends Controller
                     'uuid' => $store->uuid,
                     'name' => $store->nama_toko ?? $store->name ?? null,
                     'subdomain' => $store->subdomain,
+                    'domain' => $store->domain ?? null,
+                    'phone' => $store->phone ?? null,
+                    'category' => $store->category ?? null,
                     'description' => $store->description ?? null,
+                    'provinsi' => $store->provinsi ?? null,
+                    'kota' => $store->kota ?? null,
+                    'kecamatan' => $store->kecamatan ?? null,
+                    'province' => $store->provinsi ?? null,  // Alias
+                    'city' => $store->kota ?? null,         // Alias
+                    'district' => $store->kecamatan ?? null, // Alias
                     'logo' => $store->logo ?? null,
                 ];
             }
