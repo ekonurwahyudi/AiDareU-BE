@@ -57,6 +57,87 @@ class StoreController extends Controller
     }
 
     /**
+     * Show single store by UUID
+     */
+    public function show(Request $request, $uuid)
+    {
+        try {
+            $user = null;
+
+            // Try Sanctum auth first
+            if ($request->bearerToken()) {
+                $user = auth('sanctum')->user();
+            }
+
+            // Try web session auth
+            if (!$user) {
+                $user = auth('web')->user();
+            }
+
+            // Try X-User-UUID header
+            if (!$user && $request->header('X-User-UUID')) {
+                $userUuid = $request->header('X-User-UUID');
+                $user = User::where('uuid', $userUuid)->first();
+            }
+
+            // Fallback for development
+            if (!$user) {
+                $targetUuid = 'e4fcfcba-63bc-41ff-a36c-11c6e57d16f8';
+                $user = User::where('uuid', $targetUuid)->first();
+            }
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated'
+                ], 401);
+            }
+
+            $store = Store::where('uuid', $uuid)
+                          ->where('user_id', $user->uuid)
+                          ->first();
+
+            if (!$store) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Store not found'
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $store->id,
+                    'uuid' => $store->uuid,
+                    'name' => $store->name,
+                    'subdomain' => $store->subdomain,
+                    'domain' => $store->domain,
+                    'phone' => $store->phone,
+                    'category' => $store->category,
+                    'description' => $store->description,
+                    'provinsi' => $store->provinsi,
+                    'kota' => $store->kota,
+                    'kecamatan' => $store->kecamatan,
+                    'province' => $store->provinsi, // Alias for frontend compatibility
+                    'city' => $store->kota,         // Alias for frontend compatibility
+                    'district' => $store->kecamatan, // Alias for frontend compatibility
+                    'is_active' => $store->is_active,
+                    'url' => 'https://' . $store->subdomain . '.aidareu.com',
+                    'created_at' => $store->created_at,
+                    'updated_at' => $store->updated_at
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch store',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Create a new store
      */
     public function store(Request $request)

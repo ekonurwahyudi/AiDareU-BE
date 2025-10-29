@@ -216,6 +216,7 @@ Route::post('/notifications/orders/{orderUuid}/read', [NotificationController::c
 
 // Public: Alternative API endpoints for frontend (no auth required)
 Route::get('/public/stores', [\App\Http\Controllers\StoreController::class, 'index']);
+Route::get('/public/stores/{uuid}', [\App\Http\Controllers\StoreController::class, 'show']);
 
 // Frontend-expected endpoints (for authenticated use)
 Route::get('/stores', [\App\Http\Controllers\StoreController::class, 'index']);
