@@ -247,7 +247,7 @@ class PixelStoreController extends Controller
     /**
      * Delete pixel store
      */
-    public function destroy($pixelUuid): JsonResponse
+    public function destroy(Request $request, $pixelUuid): JsonResponse
     {
         try {
             $user = null;
