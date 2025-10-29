@@ -436,48 +436,6 @@ class StoreController extends Controller
     /**
      * Get specific store
      */
-    public function show(Request $request, $uuid)
-    {
-        try {
-            $user = Auth::user();
-            
-            $store = Store::where('uuid', $uuid)
-                ->where('user_id', $user->uuid)
-                ->with(['socialMedia', 'bankAccounts'])
-                ->first();
-
-            if (!$store) {
-                return response()->json([
-                    'message' => 'Store not found'
-                ], 404);
-            }
-
-            return response()->json([
-                'store' => [
-                    'id' => $store->id,
-                    'uuid' => $store->uuid,
-                    'name' => $store->name,
-                    'subdomain' => $store->subdomain,
-                    'phone' => $store->phone,
-                    'category' => $store->category,
-                    'description' => $store->description,
-                    'status' => $store->status,
-                    'is_published' => $store->is_published,
-                    'url' => 'https://' . $store->subdomain . '.aidareu.com',
-                    'social_media' => $store->socialMedia,
-                    'bank_accounts' => $store->bankAccounts,
-                    'created_at' => $store->created_at,
-                    'updated_at' => $store->updated_at
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Failed to get store',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
 
     /**
      * Update store
