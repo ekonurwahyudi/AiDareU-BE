@@ -438,6 +438,15 @@ class BankAccountController extends Controller
                 ], 404);
             }
 
+            // Check if bank account is used in any orders
+            $ordersCount = \App\Models\Order::where('uuid_bank_account', $bankAccount->uuid)->count();
+            if ($ordersCount > 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Cannot delete bank account. It is used in {$ordersCount} order(s). Please set orders to use different bank account first."
+                ], 400);
+            }
+
             $bankAccount->delete();
 
             return response()->json([

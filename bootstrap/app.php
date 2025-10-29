@@ -14,9 +14,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: __DIR__.'/../routes/health.php',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        // Enable CORS using config/cors.php
-        $middleware->append(HandleCors::class);
-        
+        // Enable CORS with high priority using config/cors.php
+        $middleware->prepend(HandleCors::class);
+
         // Add response compression for API routes
         $middleware->appendToGroup('api', CompressResponse::class);
 
