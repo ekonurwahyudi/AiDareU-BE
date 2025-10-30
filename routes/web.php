@@ -6,34 +6,26 @@ use App\Http\Controllers\TenantController;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Response;
 
-// Helper function to get CORS headers
-function getStorageCorsHeaders($origin) {
+// Handle OPTIONS preflight for storage route
+Route::options('/storage/{path}', function () {
+    $origin = request()->header('Origin');
     $allowedOrigins = [
         'https://aidareu.com',
         'https://www.aidareu.com',
         'http://localhost:3000',
         'http://localhost:3001',
         'http://localhost:3002',
+        'http://localhost:8080',
     ];
 
     $headers = [];
-
-    // Check if origin is allowed
-    if (in_array($origin, $allowedOrigins) || str_ends_with($origin, '.aidareu.com')) {
+    if (in_array($origin, $allowedOrigins) || str_ends_with($origin ?? '', '.aidareu.com')) {
         $headers['Access-Control-Allow-Origin'] = $origin;
         $headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS';
         $headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization';
         $headers['Access-Control-Allow-Credentials'] = 'true';
         $headers['Access-Control-Max-Age'] = '86400';
     }
-
-    return $headers;
-}
-
-// Handle OPTIONS preflight for storage route
-Route::options('/storage/{path}', function ($path) {
-    $origin = request()->header('Origin');
-    $headers = getStorageCorsHeaders($origin);
 
     return response('', 200, $headers);
 })->where('path', '.*');
@@ -48,17 +40,28 @@ Route::get('/storage/{path}', function ($path) {
     $fullPath = Storage::disk('public')->path($path);
     $type = mime_content_type($fullPath) ?: 'application/octet-stream';
 
-    // Get origin from request
+    // Get origin and add CORS headers
     $origin = request()->header('Origin');
+    $allowedOrigins = [
+        'https://aidareu.com',
+        'https://www.aidareu.com',
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:3002',
+        'http://localhost:8080',
+    ];
 
     $headers = [
         'Content-Type' => $type,
-        'Cache-Control' => 'public, max-age=86400', // Cache for 24 hours
+        'Cache-Control' => 'public, max-age=86400',
     ];
 
-    // Add CORS headers
-    $corsHeaders = getStorageCorsHeaders($origin);
-    $headers = array_merge($headers, $corsHeaders);
+    if (in_array($origin, $allowedOrigins) || str_ends_with($origin ?? '', '.aidareu.com')) {
+        $headers['Access-Control-Allow-Origin'] = $origin;
+        $headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS';
+        $headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization';
+        $headers['Access-Control-Allow-Credentials'] = 'true';
+    }
 
     return Response::make($file, 200, $headers);
 })->where('path', '.*');
