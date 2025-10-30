@@ -11,15 +11,35 @@ Route::get('/storage/{path}', function ($path) {
     if (!Storage::disk('public')->exists($path)) {
         abort(404, 'File not found');
     }
-    
+
     $file = Storage::disk('public')->get($path);
     $fullPath = Storage::disk('public')->path($path);
     $type = mime_content_type($fullPath) ?: 'application/octet-stream';
-    
-    return Response::make($file, 200, [
+
+    // Get origin from request
+    $origin = request()->header('Origin');
+    $allowedOrigins = [
+        'https://aidareu.com',
+        'https://www.aidareu.com',
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:3002',
+    ];
+
+    $headers = [
         'Content-Type' => $type,
         'Cache-Control' => 'public, max-age=86400', // Cache for 24 hours
-    ]);
+    ];
+
+    // Add CORS headers if origin is allowed
+    if (in_array($origin, $allowedOrigins) || str_ends_with($origin, '.aidareu.com')) {
+        $headers['Access-Control-Allow-Origin'] = $origin;
+        $headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS';
+        $headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization';
+        $headers['Access-Control-Allow-Credentials'] = 'true';
+    }
+
+    return Response::make($file, 200, $headers);
 })->where('path', '.*');
 
 // Main domain routes (when no subdomain/custom domain)
