@@ -10,13 +10,27 @@ class ForceJsonResponse
     public function handle(Request $request, Closure $next)
     {
         $request->headers->set('Accept', 'application/json');
-        
+
+        // Handle preflight OPTIONS requests
+        if ($request->getMethod() === 'OPTIONS') {
+            $origin = $request->header('Origin');
+
+            if ($this->isAllowedOrigin($origin)) {
+                return response('', 200)
+                    ->header('Access-Control-Allow-Origin', $origin)
+                    ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH')
+                    ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-User-UUID, Accept')
+                    ->header('Access-Control-Allow-Credentials', 'true')
+                    ->header('Access-Control-Max-Age', '86400');
+            }
+        }
+
         $response = $next($request);
-        
+
         // Ensure CORS headers are present for API routes
         if ($request->is('api/*')) {
             $origin = $request->header('Origin');
-            
+
             // Check if origin matches allowed patterns
             if ($this->isAllowedOrigin($origin)) {
                 $response->headers->set('Access-Control-Allow-Origin', $origin);
@@ -26,7 +40,7 @@ class ForceJsonResponse
                 $response->headers->set('Access-Control-Max-Age', '86400');
             }
         }
-        
+
         return $response;
     }
     
