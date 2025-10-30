@@ -283,25 +283,47 @@ class ProductController extends Controller
                 $updateData['stock'] = 0;
             }
             
-            // Handle new image uploads
-            if ($request->hasFile('images')) {
-                // Delete old images
-                if ($product->upload_gambar_produk) {
-                    foreach ($product->upload_gambar_produk as $oldImage) {
-                        Storage::disk('public')->delete($oldImage);
+            // Handle image updates
+            if ($request->hasFile('images') || $request->has('existing_images')) {
+                // Get existing images from request (images user wants to keep)
+                $existingImages = [];
+                if ($request->has('existing_images')) {
+                    $existingImagesJson = $request->input('existing_images');
+                    $existingImages = json_decode($existingImagesJson, true) ?? [];
+                }
+
+                // Upload new images
+                $newImagePaths = [];
+                if ($request->hasFile('images')) {
+                    foreach ($request->file('images') as $index => $image) {
+                        if ($index >= 10) break; // Limit to 10 images
+
+                        $filename = Str::uuid() . '.' . $image->getClientOriginalExtension();
+                        $path = $image->storeAs('products', $filename, 'public');
+                        $newImagePaths[] = $path;
                     }
                 }
 
-                $imagePaths = [];
-                foreach ($request->file('images') as $index => $image) {
-                    if ($index >= 10) break; // Limit to 10 images
-                    
-                    $filename = Str::uuid() . '.' . $image->getClientOriginalExtension();
-                    $path = $image->storeAs('products', $filename, 'public');
-                    $imagePaths[] = $path;
+                // Merge existing + new images (limit to 10 total)
+                $allImages = array_merge($existingImages, $newImagePaths);
+                $allImages = array_slice($allImages, 0, 10); // Max 10 images
+
+                // Delete images that are no longer needed
+                $oldImages = $product->upload_gambar_produk ?? [];
+                $imagesToDelete = array_diff($oldImages, $allImages);
+                foreach ($imagesToDelete as $imageToDelete) {
+                    Storage::disk('public')->delete($imageToDelete);
                 }
-                
-                $updateData['upload_gambar_produk'] = $imagePaths;
+
+                $updateData['upload_gambar_produk'] = $allImages;
+
+                Log::info('Image upload', [
+                    'old_count' => count($oldImages),
+                    'existing_count' => count($existingImages),
+                    'new_count' => count($newImagePaths),
+                    'total_count' => count($allImages),
+                    'deleted_count' => count($imagesToDelete)
+                ]);
             }
 
             $updated = $product->update($updateData);
