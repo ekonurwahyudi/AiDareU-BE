@@ -80,16 +80,11 @@ class StoreController extends Controller
                 $user = User::where('uuid', $userUuid)->first();
             }
 
-            // Fallback for development
-            if (!$user) {
-                $targetUuid = 'e4fcfcba-63bc-41ff-a36c-11c6e57d16f8';
-                $user = User::where('uuid', $targetUuid)->first();
-            }
-
+            // Require authentication - no fallback to random users!
             if (!$user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not authenticated'
+                    'message' => 'Authentication required. Please login to view your store.'
                 ], 401);
             }
 
@@ -368,22 +363,31 @@ class StoreController extends Controller
             }
 
             // Default: Get user's stores (authenticated)
-            $user = Auth::user();
+            $user = null;
 
+            // Try Sanctum auth first
+            if ($request->bearerToken()) {
+                $user = auth('sanctum')->user();
+            }
+
+            // Try web session auth
             if (!$user) {
-                // Try to get user from session if available
                 $user = auth('web')->user();
+            }
 
-                if (!$user) {
-                    // For development/testing - try to find the specific user by UUID
-                    $targetUuid = 'e4fcfcba-63bc-41ff-a36c-11c6e57d16f8'; // Your login UUID
-                    $user = User::where('uuid', $targetUuid)->first();
+            // Try X-User-UUID header
+            if (!$user && $request->header('X-User-UUID')) {
+                $userUuid = $request->header('X-User-UUID');
+                $user = User::where('uuid', $userUuid)->first();
+            }
 
-                    if (!$user) {
-                        // Fallback to first user from database
-                        $user = User::first();
-                    }
-                }
+            // Require authentication - no fallback to random users!
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Authentication required. Please login to view your stores.',
+                    'stores' => []
+                ], 401);
             }
 
             $stores = Store::where('user_id', $user->uuid)
