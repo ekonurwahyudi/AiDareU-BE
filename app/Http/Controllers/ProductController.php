@@ -50,40 +50,47 @@ class ProductController extends Controller
             $query = Product::with(['category:id,judul_kategori', 'store:uuid,name'])
                 ->select('id', 'uuid', 'nama_produk', 'deskripsi', 'harga_produk', 'harga_diskon', 'status_produk', 'jenis_produk', 'stock', 'category_id', 'uuid_store', 'upload_gambar_produk', 'created_at', 'url_produk');
 
-            // Filter by store UUID based on user role
-            if ($isSuperadmin) {
-                // Superadmin: can view all stores or filter by specific store_uuid
-                if ($request->has('store_uuid')) {
-                    $query->where('uuid_store', $request->store_uuid);
-                    \Log::info('Superadmin filtering products by store', ['uuid_store' => $request->store_uuid]);
-                }
-                // If no store_uuid provided, show all products (no filter)
+            // Filter by store UUID based on context
+            if ($request->has('store_uuid')) {
+                // PUBLIC ACCESS: Filter by store_uuid parameter (for customers viewing store)
+                // This allows public access to view products by store without authentication
+                $query->where('uuid_store', $request->store_uuid);
+                \Log::info('Public access - filtering products by store_uuid parameter', [
+                    'uuid_store' => $request->store_uuid
+                ]);
             } else {
-                // Non-superadmin (Premium, Free, etc): only show products from their own store
+                // PRIVATE ACCESS: No store_uuid provided, user wants to see their own products
+                // Require authentication
                 if (!$user) {
                     return response()->json([
                         'status' => 'error',
-                        'message' => 'Authentication required',
+                        'message' => 'Authentication required. Provide store_uuid parameter for public access.',
                         'data' => ['data' => [], 'total' => 0]
                     ], 401);
                 }
 
-                // Get user's store
-                $userStore = \App\Models\Store::where('user_id', $user->uuid)->first();
-                if (!$userStore) {
-                    return response()->json([
-                        'status' => 'error',
-                        'message' => 'User does not have a store',
-                        'data' => ['data' => [], 'total' => 0]
-                    ], 404);
-                }
+                // Superadmin can see all products if no store_uuid filter
+                if ($isSuperadmin) {
+                    \Log::info('Superadmin viewing all products (no store_uuid filter)');
+                    // No filter - show all products
+                } else {
+                    // Non-superadmin: only show products from their own store
+                    $userStore = \App\Models\Store::where('user_id', $user->uuid)->first();
+                    if (!$userStore) {
+                        return response()->json([
+                            'status' => 'error',
+                            'message' => 'User does not have a store',
+                            'data' => ['data' => [], 'total' => 0]
+                        ], 404);
+                    }
 
-                // Always filter by user's store UUID, ignore any store_uuid from request
-                $query->where('uuid_store', $userStore->uuid);
-                \Log::info('Non-superadmin user - filtering products by own store', [
-                    'user_uuid' => $user->uuid,
-                    'store_uuid' => $userStore->uuid
-                ]);
+                    // Filter by user's store UUID
+                    $query->where('uuid_store', $userStore->uuid);
+                    \Log::info('Non-superadmin user - filtering products by own store', [
+                        'user_uuid' => $user->uuid,
+                        'store_uuid' => $userStore->uuid
+                    ]);
+                }
             }
 
             // Filter by category
