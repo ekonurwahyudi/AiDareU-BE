@@ -22,8 +22,16 @@ composer install --no-dev --prefer-dist --optimize-autoloader || true
 chown -R www-data:www-data storage bootstrap/cache
 chmod -R ug+rwx storage bootstrap/cache
 
-# Storage symlink
-php artisan storage:link || true
+# Storage symlink - force recreate if exists
+rm -rf public/storage
+php artisan storage:link --force || true
+
+# Ensure storage/app/public exists
+mkdir -p storage/app/public/products
+mkdir -p storage/app/public/editor-images
+mkdir -p storage/app/public/theme
+chown -R www-data:www-data storage/app/public
+chmod -R 775 storage/app/public
 
 # Cache config/views/routes (tidak wajib)
 php artisan config:cache || true
