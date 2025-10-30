@@ -50,23 +50,41 @@ class ProductController extends Controller
             $query = Product::with(['category:id,judul_kategori', 'store:uuid,name'])
                 ->select('id', 'uuid', 'nama_produk', 'deskripsi', 'harga_produk', 'harga_diskon', 'status_produk', 'jenis_produk', 'stock', 'category_id', 'uuid_store', 'upload_gambar_produk', 'created_at', 'url_produk');
 
-            // Filter by store UUID
-            if ($request->has('store_uuid')) {
-                // Both superadmin and regular users: if store_uuid provided, filter by it
-                $query->where('uuid_store', $request->store_uuid);
-                \Log::info('Filtering products by store', ['uuid_store' => $request->store_uuid]);
-            } elseif (!$isSuperadmin) {
-                // Non-superadmin without store_uuid: should not happen, return empty
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Store UUID is required for non-superadmin users',
-                    'data' => [
-                        'data' => [],
-                        'total' => 0
-                    ]
-                ], 400);
+            // Filter by store UUID based on user role
+            if ($isSuperadmin) {
+                // Superadmin: can view all stores or filter by specific store_uuid
+                if ($request->has('store_uuid')) {
+                    $query->where('uuid_store', $request->store_uuid);
+                    \Log::info('Superadmin filtering products by store', ['uuid_store' => $request->store_uuid]);
+                }
+                // If no store_uuid provided, show all products (no filter)
+            } else {
+                // Non-superadmin (Premium, Free, etc): only show products from their own store
+                if (!$user) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Authentication required',
+                        'data' => ['data' => [], 'total' => 0]
+                    ], 401);
+                }
+
+                // Get user's store
+                $userStore = \App\Models\Store::where('user_id', $user->uuid)->first();
+                if (!$userStore) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'User does not have a store',
+                        'data' => ['data' => [], 'total' => 0]
+                    ], 404);
+                }
+
+                // Always filter by user's store UUID, ignore any store_uuid from request
+                $query->where('uuid_store', $userStore->uuid);
+                \Log::info('Non-superadmin user - filtering products by own store', [
+                    'user_uuid' => $user->uuid,
+                    'store_uuid' => $userStore->uuid
+                ]);
             }
-            // Superadmin without store_uuid: show all products (no filter)
 
             // Filter by category
             if ($request->has('category_id')) {
