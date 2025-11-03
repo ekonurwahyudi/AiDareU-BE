@@ -19,10 +19,15 @@ return [
         // Railway deployment IPs
         'http://139.99.101.27:3000',
         'http://139.99.101.27:8080',
-        // Production
+        // Production - allow both http and https for all domains
+        'http://aidareu.com',
         'https://aidareu.com',
+        'http://app.aidareu.com',
         'https://app.aidareu.com',
+        'http://api.aidareu.com',
         'https://api.aidareu.com',
+        'http://www.aidareu.com',
+        'https://www.aidareu.com',
     ],
 
     // Allow any subdomain patterns
