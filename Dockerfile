@@ -1,52 +1,35 @@
-# Frontend (Next.js) - Root Dockerfile for EasyPanel
-FROM node:18-alpine AS deps
-WORKDIR /app
-COPY frontend/package*.json ./
-RUN npm ci --ignore-scripts --no-audit --no-fund
+# Backend (Laravel with Nginx + PHP-FPM)
+FROM php:8.2-fpm-alpine
 
-FROM node:18-alpine AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY frontend/ .
+# Install Nginx, PHP extensions & tools
+RUN apk add --no-cache \
+    nginx \
+    git zip unzip \
+    libpq-dev icu-dev oniguruma-dev \
+  && docker-php-ext-install intl mbstring bcmath pdo_pgsql
 
-# Build-time environment variables
-ARG NEXT_PUBLIC_API_URL
-ARG NEXT_PUBLIC_BACKEND_URL
-ARG NEXT_PUBLIC_FRONTEND_URL
-ARG NODE_ENV
-ARG NEXT_TELEMETRY_DISABLED
+# Tambahkan Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
-ENV NEXT_PUBLIC_FRONTEND_URL=$NEXT_PUBLIC_FRONTEND_URL
-ENV NODE_ENV=$NODE_ENV
-ENV NEXT_TELEMETRY_DISABLED=$NEXT_TELEMETRY_DISABLED
+WORKDIR /var/www/html
 
-# Build icons and application
-RUN npm run build:icons && npm run build
+# Copy source code
+COPY . /var/www/html
 
-FROM node:18-alpine AS runner
-WORKDIR /app
+# Copy Nginx config
+COPY nginx.conf /etc/nginx/http.d/default.conf
 
-# Runtime environment
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
+# Copy PHP configuration for file uploads
+COPY php.ini /usr/local/etc/php/conf.d/uploads.ini
 
-# Create non-root user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+# EntryPoint untuk install deps dan jalankan artisan opsional
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Copy built application
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Permission untuk storage & cache
+RUN mkdir -p storage bootstrap/cache \
+  && chown -R www-data:www-data /var/www/html
 
-USER nextjs
-
-# EasyPanel expects port 80 for web applications
-EXPOSE 80
-
-ENV PORT=80
-ENV HOSTNAME="0.0.0.0"
-
-CMD ["node", "server.js"]
+EXPOSE 8080
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["sh", "-c", "php-fpm -D && nginx -g 'daemon off;'"]
