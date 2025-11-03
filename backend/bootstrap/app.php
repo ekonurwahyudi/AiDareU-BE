@@ -46,4 +46,32 @@ return Application::configure(basePath: dirname(__DIR__))
                 ], 401);
             }
         });
+
+        // Ensure all API exceptions return JSON with CORS headers
+        $exceptions->render(function (\Throwable $e, $request) {
+            if ($request->is('api/*')) {
+                $statusCode = method_exists($e, 'getStatusCode') ? $e->getStatusCode() : 500;
+
+                $response = response()->json([
+                    'success' => false,
+                    'message' => app()->environment('production') ? 'Server error' : $e->getMessage(),
+                    'error' => app()->environment('local') ? [
+                        'message' => $e->getMessage(),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                    ] : null
+                ], $statusCode);
+
+                // Ensure CORS headers are present
+                $origin = $request->header('Origin');
+                if ($origin) {
+                    $response->headers->set('Access-Control-Allow-Origin', $origin);
+                    $response->headers->set('Access-Control-Allow-Credentials', 'true');
+                    $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+                    $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-User-UUID, Accept');
+                }
+
+                return $response;
+            }
+        });
     })->create();
