@@ -1,0 +1,168 @@
+'use client'
+
+// React Imports
+import { useEffect, useState } from 'react'
+
+// Next Imports
+import Link from 'next/link'
+
+// Third-party Imports
+import classnames from 'classnames'
+
+// Type Imports
+import type { ShortcutsType } from '@components/layout/shared/ShortcutsDropdown'
+import type { NotificationsType } from '@components/layout/shared/NotificationsDropdown'
+
+// Component Imports
+import NavToggle from './NavToggle'
+import Logo from '@components/layout/shared/Logo'
+import NavSearch from '@components/layout/shared/search'
+import ModeDropdown from '@components/layout/shared/ModeDropdown'
+import ShortcutsDropdown from '@components/layout/shared/ShortcutsDropdown'
+import NotificationsDropdown from '@components/layout/shared/NotificationsDropdown'
+import UserDropdown from '@components/layout/shared/UserDropdown'
+
+// Hook Imports
+import useHorizontalNav from '@menu/hooks/useHorizontalNav'
+
+// Util Imports
+import { horizontalLayoutClasses } from '@layouts/utils/layoutClasses'
+
+// Vars
+const shortcuts: ShortcutsType[] = [
+  {
+    url: '/apps/calendar',
+    icon: 'tabler-calendar',
+    title: 'Calendar',
+    subtitle: 'Appointments'
+  },
+  {
+    url: '/apps/invoice/list',
+    icon: 'tabler-file-dollar',
+    title: 'Invoice App',
+    subtitle: 'Manage Accounts'
+  },
+  {
+    url: '/apps/user/list',
+    icon: 'tabler-user',
+    title: 'Users',
+    subtitle: 'Manage Users'
+  },
+  {
+    url: '/apps/roles',
+    icon: 'tabler-users-group',
+    title: 'Role Management',
+    subtitle: 'Permissions'
+  },
+  {
+    url: '/',
+    icon: 'tabler-device-desktop-analytics',
+    title: 'Dashboard',
+    subtitle: 'User Dashboard'
+  },
+  {
+    url: '/pages/account-settings',
+    icon: 'tabler-settings',
+    title: 'Settings',
+    subtitle: 'Account Settings'
+  }
+]
+
+const NavbarContent = () => {
+  // Hooks
+  const { isBreakpointReached } = useHorizontalNav()
+
+  // States
+  const [orderNotifications, setOrderNotifications] = useState<NotificationsType[]>([])
+  const [loading, setLoading] = useState(false)
+
+  // Fetch order notifications
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        setLoading(true)
+
+        // Get user data from localStorage
+        const userDataStr = localStorage.getItem('user_data')
+
+        if (!userDataStr) {
+          console.warn('⚠️ [Notifications] No user data found in localStorage, using default notifications')
+          return
+        }
+
+        const userData = JSON.parse(userDataStr)
+        const userUuid = userData.uuid
+
+        if (!userUuid) {
+          console.warn('⚠️ [Notifications] No user UUID in user data:', userData)
+          return
+        }
+
+        console.log('📡 [Notifications] Fetching notifications for user:', userUuid)
+
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/notifications/orders?user_uuid=${userUuid}`,
+          {
+            cache: 'no-store',
+            headers: {
+              'X-User-UUID': userUuid
+            }
+          }
+        )
+
+        const result = await response.json()
+
+        console.log('📬 [Notifications] API Response:', result)
+
+        if (result.success && result.data) {
+          if (result.data.length > 0) {
+            console.log('✅ [Notifications] Setting', result.data.length, 'notifications')
+            setOrderNotifications(result.data)
+          } else {
+            console.log('ℹ️ [Notifications] No new orders found')
+          }
+        } else {
+          console.warn('⚠️ [Notifications] Invalid API response:', result)
+        }
+      } catch (error) {
+        console.error('❌ [Notifications] Error fetching notifications:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchNotifications()
+
+    // Refresh notifications every 30 seconds
+    const interval = setInterval(fetchNotifications, 30000)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <div
+      className={classnames(horizontalLayoutClasses.navbarContent, 'flex items-center justify-between gap-4 is-full')}
+    >
+      <div className='flex items-center gap-4'>
+        <NavToggle />
+        {/* Hide Logo on Smaller screens */}
+        {!isBreakpointReached && (
+          <Link href='/'>
+            <Logo />
+          </Link>
+        )}
+      </div>
+
+      <div className='flex items-center'>
+        {/* <NavSearch /> */}
+        {/* <ModeDropdown /> */}
+        {/* <ShortcutsDropdown shortcuts={shortcuts} /> */}
+        <NotificationsDropdown notifications={orderNotifications} />
+        <UserDropdown />
+        {/* Language Dropdown, Notification Dropdown, quick access menu dropdown, user dropdown will be placed here */}
+      </div>
+    </div>
+  )
+}
+
+export default NavbarContent

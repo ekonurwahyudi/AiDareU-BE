@@ -1,0 +1,98 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aidareu-backend
+    ports:
+      - "8080:8080"
+    environment:
+      APP_NAME: AiDareU
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: http://localhost:8080
+      APP_KEY: ${APP_KEY:-base64:WaPKKNrAyHnZJ/74r0/ZvfYbiSo521URtXldvYFfRhM=}
+
+      # Database
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB:-aidareu}
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+
+      # Cache & Session
+      CACHE_DRIVER: file
+      SESSION_DRIVER: database
+      QUEUE_CONNECTION: sync
+
+      # Migrations
+      RUN_MIGRATIONS: "true"
+
+      # CORS - Allow frontend
+      SANCTUM_STATEFUL_DOMAINS: localhost:3000,127.0.0.1:3000
+
+      # Email
+      MAIL_MAILER: ${MAIL_MAILER:-smtp}
+      MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_ENCRYPTION: ${MAIL_ENCRYPTION:-tls}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
+      MAIL_FROM_NAME: "${APP_NAME}"
+
+      # API Keys
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      BITESHIP_API_KEY: ${BITESHIP_API_KEY}
+    volumes:
+      - backend_storage:/var/www/html/storage
+      - backend_cache:/var/www/html/bootstrap/cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - aidareu-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: aidareu-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aidareu}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_US.UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - aidareu-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-aidareu}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
+  backend_storage:
+    driver: local
+  backend_cache:
+    driver: local
+
+networks:
+  aidareu-network:
+    driver: bridge
+    name: aidareu-network
