@@ -200,7 +200,7 @@ Route::options('/upload-editor-image', function() {
 });
 
 // Public: User API for testing (no auth required)
-Route::get('/users/me', [UserController::class, 'me']);
+// Route::get('/users/me', [UserController::class, 'me']); // MOVED TO AUTHENTICATED ROUTES
 Route::put('/users/{uuid}', [UserController::class, 'update']);
 
 // Public: Dashboard API for testing (no auth required)
@@ -256,6 +256,7 @@ Route::middleware(['auth:sanctum,web'])->group(function () {
     
     // User management routes
     Route::prefix('users')->group(function () {
+        Route::get('/me', [UserController::class, 'me']); // MOVED FROM PUBLIC ROUTES
         Route::get('/{uuid}', [UserController::class, 'show']);
     });
 

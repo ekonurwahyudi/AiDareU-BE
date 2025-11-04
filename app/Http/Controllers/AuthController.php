@@ -284,6 +284,9 @@ class AuthController extends Controller
                 ], 403);
             }
 
+            // Login user to web session (for session-based auth)
+            auth()->login($user);
+
             // Create token
             $token = $user->createToken('auth_token')->plainTextToken;
 
