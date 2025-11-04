@@ -6,8 +6,10 @@ use App\Http\Controllers\TenantController;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Response;
 
-// Storage route to serve uploaded files when symbolic link doesn't work
+// IMPORTANT: Storage route MUST be FIRST to prevent being caught by tenant routes
+// This route serves uploaded files when symbolic link doesn't work
 // Accessible at: https://api.aidareu.com/storage/{path}
+// Works on ALL domains (main domain, subdomains, custom domains)
 Route::get('/storage/{path}', function ($path) {
     // Log the request for debugging
     \Log::info('Storage request', [
@@ -54,11 +56,12 @@ Route::domain(config('app.domain', 'localhost'))->group(function () {
 
 // Tenant routes (for subdomains and custom domains)
 // These will be handled by SubdomainMiddleware and CustomDomainMiddleware
+// IMPORTANT: Exclude /storage path to prevent conflict with storage route above
 Route::middleware(['web'])->group(function () {
     // Home page for tenant
     Route::get('/', [TenantController::class, 'showLandingPage']);
-    
-    // Dynamic tenant routes
+
+    // Dynamic tenant routes (exclude 'storage' path)
     Route::get('/{path}', [TenantController::class, 'handleDynamicRoute'])
-        ->where('path', '[a-zA-Z0-9\-_/]+');
+        ->where('path', '(?!storage)[a-zA-Z0-9\-_/]+');
 });
