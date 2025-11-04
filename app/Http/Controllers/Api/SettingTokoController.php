@@ -221,6 +221,12 @@ class SettingTokoController extends Controller
                 $logo = $request->file('logo');
                 $logoPath = $logo->store('theme/logos', 'public');
 
+                // Set proper permissions
+                $fullPath = storage_path('app/public/' . $logoPath);
+                if (file_exists($fullPath)) {
+                    chmod($fullPath, 0775);
+                }
+
                 // Verify file saved
                 if (!Storage::disk('public')->exists($logoPath)) {
                     throw new \Exception('Failed to save logo: File does not exist after upload');
@@ -242,6 +248,12 @@ class SettingTokoController extends Controller
 
                 $favicon = $request->file('favicon');
                 $faviconPath = $favicon->store('theme/favicons', 'public');
+
+                // Set proper permissions
+                $fullPath = storage_path('app/public/' . $faviconPath);
+                if (file_exists($fullPath)) {
+                    chmod($fullPath, 0775);
+                }
 
                 // Verify file saved
                 if (!Storage::disk('public')->exists($faviconPath)) {
@@ -337,8 +349,13 @@ class SettingTokoController extends Controller
                     $slidePath = $slide->store('theme/slides', 'public');
                     $data["slide_$i"] = $slidePath;
 
-                    // Verify file was actually saved
+                    // Set proper permissions (775)
                     $fullPath = storage_path('app/public/' . $slidePath);
+                    if (file_exists($fullPath)) {
+                        chmod($fullPath, 0775);
+                    }
+
+                    // Verify file was actually saved
                     $fileExists = file_exists($fullPath);
                     $fileSize = $fileExists ? filesize($fullPath) : 0;
 
@@ -645,6 +662,12 @@ class SettingTokoController extends Controller
 
                 $ogImage = $request->file('og_image');
                 $ogImagePath = $ogImage->store('theme/seo', 'public');
+
+                // Set proper permissions
+                $fullPath = storage_path('app/public/' . $ogImagePath);
+                if (file_exists($fullPath)) {
+                    chmod($fullPath, 0775);
+                }
 
                 // Verify file saved
                 if (!Storage::disk('public')->exists($ogImagePath)) {
