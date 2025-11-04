@@ -5,42 +5,80 @@ use App\Http\Controllers\Api\LandingPageController;
 use App\Http\Controllers\TenantController;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\Log;
 
 // CRITICAL: Storage route handler
 // This closure will be used for storage routes below
 $storageHandler = function ($path) {
-    // Log the request for debugging
-    \Log::info('Storage request', [
-        'path' => $path,
-        'exists' => Storage::disk('public')->exists($path),
-        'full_path' => Storage::disk('public')->path($path)
-    ]);
+    try {
+        // Decode URL-encoded path
+        $path = urldecode($path);
 
-    if (!Storage::disk('public')->exists($path)) {
-        \Log::warning('Storage file not found', [
+        // Security: prevent directory traversal
+        if (strpos($path, '..') !== false) {
+            \Log::warning('Directory traversal attempt', ['path' => $path]);
+            abort(403, 'Forbidden');
+        }
+
+        // Log the request for debugging
+        \Log::info('Storage request', [
             'path' => $path,
-            'checked_path' => storage_path('app/public/' . $path)
+            'exists' => Storage::disk('public')->exists($path),
+            'full_path' => Storage::disk('public')->path($path)
         ]);
-        abort(404, 'File not found');
+
+        if (!Storage::disk('public')->exists($path)) {
+            \Log::warning('Storage file not found', [
+                'path' => $path,
+                'checked_path' => storage_path('app/public/' . $path)
+            ]);
+            abort(404, 'File not found');
+        }
+
+        $fullPath = Storage::disk('public')->path($path);
+
+        // Get file size and MIME type
+        $fileSize = filesize($fullPath);
+        $mimeType = mime_content_type($fullPath) ?: 'application/octet-stream';
+
+        // Get file content
+        $file = Storage::disk('public')->get($path);
+
+        // Return response with proper headers
+        return Response::make($file, 200, [
+            'Content-Type' => $mimeType,
+            'Content-Length' => $fileSize,
+            'Cache-Control' => 'public, max-age=86400', // Cache for 24 hours
+            'Access-Control-Allow-Origin' => '*', // Allow CORS for images
+            'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Content-Type, Accept, Authorization, X-Requested-With',
+            'Access-Control-Expose-Headers' => 'Content-Length, Content-Type',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Storage handler error', [
+            'path' => $path,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        abort(500, 'Internal Server Error');
     }
-
-    $file = Storage::disk('public')->get($path);
-    $fullPath = Storage::disk('public')->path($path);
-    $type = mime_content_type($fullPath) ?: 'application/octet-stream';
-
-    return Response::make($file, 200, [
-        'Content-Type' => $type,
-        'Cache-Control' => 'public, max-age=86400', // Cache for 24 hours
-        'Access-Control-Allow-Origin' => '*', // Allow CORS for images
-        'Access-Control-Allow-Methods' => 'GET, OPTIONS',
-        'Access-Control-Allow-Headers' => 'Content-Type, Accept',
-    ]);
 };
 
 // PRIORITY 1: Storage route - MUST be registered BEFORE any catch-all routes
 // Works on ALL domains (main domain, subdomains, custom domains)
 // Accessible at: https://api.aidareu.com/storage/{path}
 Route::get('/storage/{path}', $storageHandler)->where('path', '.*');
+
+// OPTIONS handler for CORS preflight on storage routes
+Route::options('/storage/{path}', function () {
+    return response('', 200, [
+        'Access-Control-Allow-Origin' => '*',
+        'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Headers' => 'Content-Type, Accept, Authorization, X-Requested-With',
+        'Access-Control-Max-Age' => '86400',
+    ]);
+})->where('path', '.*');
 
 // Main domain routes (when no subdomain/custom domain)
 Route::domain(config('app.domain', 'localhost'))->group(function () use ($storageHandler) {
