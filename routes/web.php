@@ -6,11 +6,9 @@ use App\Http\Controllers\TenantController;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Response;
 
-// IMPORTANT: Storage route MUST be FIRST to prevent being caught by tenant routes
-// This route serves uploaded files when symbolic link doesn't work
-// Accessible at: https://api.aidareu.com/storage/{path}
-// Works on ALL domains (main domain, subdomains, custom domains)
-Route::get('/storage/{path}', function ($path) {
+// CRITICAL: Storage route handler
+// This closure will be used for storage routes below
+$storageHandler = function ($path) {
     // Log the request for debugging
     \Log::info('Storage request', [
         'path' => $path,
@@ -37,18 +35,26 @@ Route::get('/storage/{path}', function ($path) {
         'Access-Control-Allow-Methods' => 'GET, OPTIONS',
         'Access-Control-Allow-Headers' => 'Content-Type, Accept',
     ]);
-})->where('path', '.*');
+};
+
+// PRIORITY 1: Storage route - MUST be registered BEFORE any catch-all routes
+// Works on ALL domains (main domain, subdomains, custom domains)
+// Accessible at: https://api.aidareu.com/storage/{path}
+Route::get('/storage/{path}', $storageHandler)->where('path', '.*');
 
 // Main domain routes (when no subdomain/custom domain)
-Route::domain(config('app.domain', 'localhost'))->group(function () {
+Route::domain(config('app.domain', 'localhost'))->group(function () use ($storageHandler) {
+    // Storage route for main domain
+    Route::get('/storage/{path}', $storageHandler)->where('path', '.*');
+
     Route::get('/', function () {
         return view('welcome');
     });
-    
+
     // Route untuk menampilkan landing page yang di-generate
     Route::get('/{slug}', [LandingPageController::class, 'showBySlug'])
         ->where('slug', '[a-zA-Z0-9\-_]+');
-    
+
     // Route untuk menampilkan landing page berdasarkan UUID
     Route::get('/uuid/{uuid}', [LandingPageController::class, 'showByUuid'])
         ->where('uuid', '[a-fA-F0-9\-]+');
@@ -56,12 +62,15 @@ Route::domain(config('app.domain', 'localhost'))->group(function () {
 
 // Tenant routes (for subdomains and custom domains)
 // These will be handled by SubdomainMiddleware and CustomDomainMiddleware
-// IMPORTANT: Exclude /storage path to prevent conflict with storage route above
-Route::middleware(['web'])->group(function () {
+Route::middleware(['web'])->group(function () use ($storageHandler) {
+    // Storage route for tenant domains/subdomains - MUST be first in this group
+    Route::get('/storage/{path}', $storageHandler)->where('path', '.*');
+
     // Home page for tenant
     Route::get('/', [TenantController::class, 'showLandingPage']);
 
-    // Dynamic tenant routes (exclude 'storage' path)
+    // Dynamic tenant routes
+    // NOTE: Storage is handled above, so this won't catch /storage/* paths
     Route::get('/{path}', [TenantController::class, 'handleDynamicRoute'])
-        ->where('path', '(?!storage)[a-zA-Z0-9\-_/]+');
+        ->where('path', '[a-zA-Z0-9\-_/]+');
 });
