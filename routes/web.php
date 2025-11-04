@@ -7,18 +7,22 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Response;
 
 // Storage route to serve uploaded files when symbolic link doesn't work
+// Accessible at: https://api.aidareu.com/storage/{path}
 Route::get('/storage/{path}', function ($path) {
     if (!Storage::disk('public')->exists($path)) {
         abort(404, 'File not found');
     }
-    
+
     $file = Storage::disk('public')->get($path);
     $fullPath = Storage::disk('public')->path($path);
     $type = mime_content_type($fullPath) ?: 'application/octet-stream';
-    
+
     return Response::make($file, 200, [
         'Content-Type' => $type,
         'Cache-Control' => 'public, max-age=86400', // Cache for 24 hours
+        'Access-Control-Allow-Origin' => '*', // Allow CORS for images
+        'Access-Control-Allow-Methods' => 'GET, OPTIONS',
+        'Access-Control-Allow-Headers' => 'Content-Type, Accept',
     ]);
 })->where('path', '.*');
 
