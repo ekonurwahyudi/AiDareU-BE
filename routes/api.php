@@ -42,6 +42,52 @@ Route::get('/test-upload', function () {
     return response()->json(['message' => 'Upload endpoint is accessible!']);
 });
 
+// Test database connection endpoint
+Route::get('/test-db', function () {
+    try {
+        // Test database connection
+        \DB::connection()->getPdo();
+
+        // Get database info
+        $dbName = \DB::connection()->getDatabaseName();
+        $usersCount = \DB::table('users')->count();
+        $storesCount = \DB::table('stores')->count();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Database connected successfully!',
+            'database' => $dbName,
+            'connection' => 'OK',
+            'stats' => [
+                'users' => $usersCount,
+                'stores' => $storesCount
+            ],
+            'timestamp' => now()->toIso8601String()
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Database connection failed!',
+            'error' => $e->getMessage(),
+            'timestamp' => now()->toIso8601String()
+        ], 500);
+    }
+});
+
+// Test CORS endpoint
+Route::get('/test-cors', function () {
+    return response()->json([
+        'status' => 'success',
+        'message' => 'CORS is working!',
+        'headers' => [
+            'origin' => request()->header('Origin'),
+            'referer' => request()->header('Referer'),
+            'host' => request()->header('Host')
+        ],
+        'timestamp' => now()->toIso8601String()
+    ]);
+});
+
 // Debug stores endpoint
 Route::get('/debug/stores', function () {
     try {
