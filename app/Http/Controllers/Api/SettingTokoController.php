@@ -212,24 +212,44 @@ class SettingTokoController extends Controller
             elseif ($request->hasFile('logo')) {
                 // Delete old logo if exists
                 if ($existingSettings && $existingSettings->logo) {
-                    Storage::disk('public')->delete($existingSettings->logo);
+                    if (Storage::disk('public')->exists($existingSettings->logo)) {
+                        Storage::disk('public')->delete($existingSettings->logo);
+                        \Log::info('Deleted old logo', ['path' => $existingSettings->logo]);
+                    }
                 }
 
                 $logo = $request->file('logo');
                 $logoPath = $logo->store('theme/logos', 'public');
+
+                // Verify file saved
+                if (!Storage::disk('public')->exists($logoPath)) {
+                    throw new \Exception('Failed to save logo: File does not exist after upload');
+                }
+
                 $data['logo'] = $logoPath;
+                \Log::info('Logo uploaded successfully', ['path' => $logoPath]);
             }
 
             // Handle favicon upload
             if ($request->hasFile('favicon')) {
                 // Delete old favicon if exists
                 if ($existingSettings && $existingSettings->favicon) {
-                    Storage::disk('public')->delete($existingSettings->favicon);
+                    if (Storage::disk('public')->exists($existingSettings->favicon)) {
+                        Storage::disk('public')->delete($existingSettings->favicon);
+                        \Log::info('Deleted old favicon', ['path' => $existingSettings->favicon]);
+                    }
                 }
 
                 $favicon = $request->file('favicon');
                 $faviconPath = $favicon->store('theme/favicons', 'public');
+
+                // Verify file saved
+                if (!Storage::disk('public')->exists($faviconPath)) {
+                    throw new \Exception('Failed to save favicon: File does not exist after upload');
+                }
+
                 $data['favicon'] = $faviconPath;
+                \Log::info('Favicon uploaded successfully', ['path' => $faviconPath]);
             }
 
             $settings = SettingToko::updateOrCreate(
@@ -292,9 +312,21 @@ class SettingTokoController extends Controller
 
             $data = ['uuid_store' => $request->uuid_store];
 
+            // Get existing slides to delete old files
+            $existingSlides = SlideToko::where('uuid_store', $request->uuid_store)->first();
+
             // Handle slide uploads
             for ($i = 1; $i <= 3; $i++) {
                 if ($request->hasFile("slide_$i")) {
+                    // Delete old slide file if exists
+                    if ($existingSlides && $existingSlides->{"slide_$i"}) {
+                        $oldPath = $existingSlides->{"slide_$i"};
+                        if (Storage::disk('public')->exists($oldPath)) {
+                            Storage::disk('public')->delete($oldPath);
+                            \Log::info("Deleted old slide_$i", ['path' => $oldPath]);
+                        }
+                    }
+
                     $slide = $request->file("slide_$i");
                     \Log::info("Processing slide_$i", [
                         'original_name' => $slide->getClientOriginalName(),
@@ -305,11 +337,26 @@ class SettingTokoController extends Controller
                     $slidePath = $slide->store('theme/slides', 'public');
                     $data["slide_$i"] = $slidePath;
 
-                    \Log::info("Slide_$i uploaded successfully", [
+                    // Verify file was actually saved
+                    $fullPath = storage_path('app/public/' . $slidePath);
+                    $fileExists = file_exists($fullPath);
+                    $fileSize = $fileExists ? filesize($fullPath) : 0;
+
+                    \Log::info("Slide_$i uploaded", [
                         'path' => $slidePath,
-                        'full_path' => storage_path('app/public/' . $slidePath),
-                        'exists' => file_exists(storage_path('app/public/' . $slidePath))
+                        'full_path' => $fullPath,
+                        'exists' => $fileExists,
+                        'size' => $fileSize,
+                        'original_size' => $slide->getSize()
                     ]);
+
+                    // Throw error if file doesn't exist or size mismatch
+                    if (!$fileExists) {
+                        throw new \Exception("Failed to save slide_$i: File does not exist after upload");
+                    }
+                    if ($fileSize !== $slide->getSize()) {
+                        throw new \Exception("Failed to save slide_$i: File size mismatch (uploaded: {$slide->getSize()}, saved: $fileSize)");
+                    }
                 }
             }
 
@@ -583,11 +630,29 @@ class SettingTokoController extends Controller
 
             $data = $request->only(['uuid_store', 'meta_title', 'deskripsi', 'keyword', 'og_title', 'og_deskripsi']);
 
+            // Get existing SEO settings
+            $existingSeo = SeoToko::where('uuid_store', $request->uuid_store)->first();
+
             // Handle OG image upload
             if ($request->hasFile('og_image')) {
+                // Delete old OG image if exists
+                if ($existingSeo && $existingSeo->og_image) {
+                    if (Storage::disk('public')->exists($existingSeo->og_image)) {
+                        Storage::disk('public')->delete($existingSeo->og_image);
+                        \Log::info('Deleted old OG image', ['path' => $existingSeo->og_image]);
+                    }
+                }
+
                 $ogImage = $request->file('og_image');
                 $ogImagePath = $ogImage->store('theme/seo', 'public');
+
+                // Verify file saved
+                if (!Storage::disk('public')->exists($ogImagePath)) {
+                    throw new \Exception('Failed to save OG image: File does not exist after upload');
+                }
+
                 $data['og_image'] = $ogImagePath;
+                \Log::info('OG image uploaded successfully', ['path' => $ogImagePath]);
             }
 
             $seo = SeoToko::updateOrCreate(
