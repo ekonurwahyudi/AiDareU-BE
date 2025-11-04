@@ -18,12 +18,25 @@ fi
 # Install composer deps (optimize)
 composer install --no-dev --prefer-dist --optimize-autoloader || true
 
+# Ensure storage directory structure exists (for Docker volumes)
+mkdir -p storage/app/public/theme/logos
+mkdir -p storage/app/public/theme/slides
+mkdir -p storage/app/public/theme/favicons
+mkdir -p storage/app/public/theme/seo
+mkdir -p storage/app/public/products
+mkdir -p storage/app/public/products-digital
+mkdir -p storage/app/public/editor-images
+mkdir -p storage/framework/cache/data
+mkdir -p storage/framework/sessions
+mkdir -p storage/framework/views
+mkdir -p storage/logs
+
 # Permission
 chown -R www-data:www-data storage bootstrap/cache
 chmod -R ug+rwx storage bootstrap/cache
 
-# Storage symlink
-php artisan storage:link || true
+# Storage symlink (force recreate to ensure it's correct)
+php artisan storage:link --force || true
 
 # Cache config/views/routes (tidak wajib)
 php artisan config:cache || true
