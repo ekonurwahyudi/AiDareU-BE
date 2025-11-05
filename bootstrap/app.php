@@ -5,7 +5,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\HandleCors;
 use App\Http\Middleware\CompressResponse;
-use App\Http\Middleware\ForceJsonResponse;
+// use App\Http\Middleware\ForceJsonResponse; // DISABLED: Causes issues with subdomain routing
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -18,8 +18,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // Enable CORS with highest priority using config/cors.php
         $middleware->prepend(HandleCors::class);
 
-        // Add Force JSON response and compression for API routes only
-        $middleware->appendToGroup('api', ForceJsonResponse::class);
+        // Add compression for API routes only
+        // NOTE: ForceJsonResponse disabled - it was interfering with subdomain routing
+        // $middleware->appendToGroup('api', ForceJsonResponse::class);
         $middleware->appendToGroup('api', CompressResponse::class);
 
         // Disable CSRF protection for API endpoints since we're using session-based API auth from frontend
