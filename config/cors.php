@@ -37,8 +37,8 @@ return [
         '/^https?:\/\/127\.0\.0\.1(:\d+)?$/i',
         // Development - IP addresses
         '/^https?:\/\/\d+\.\d+\.\d+\.\d+(:\d+)?$/i',
-        // Production - aidareu.com subdomains
-        '/^https:\/\/([a-z0-9-]+\.)?aidareu\.com$/i',
+        // Production - aidareu.com subdomains (allow both http and https)
+        '/^https?:\/\/([a-z0-9-]+\.)?aidareu\.com$/i',
         // Deployment platforms
         '/^https?:\/\/([a-z0-9-]+\.)?railway\.app$/i',
         '/^https?:\/\/([a-z0-9-]+\.)?vercel\.app$/i',
