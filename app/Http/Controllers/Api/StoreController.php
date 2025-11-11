@@ -146,12 +146,24 @@ class StoreController extends Controller
     public function update(Request $request, $id): JsonResponse
     {
         try {
-            $store = Store::findOrFail($id);
+            // Try to find by UUID first, then by ID
+            $store = Store::where('uuid', $id)->first();
+            if (!$store) {
+                $store = Store::find($id);
+            }
+
+            if (!$store) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Store not found'
+                ], 404);
+            }
+
             $user = $request->user();
 
             // Check if user can update this store
-            if (!$user->hasRole('superadmin') && 
-                !$user->hasRole('owner', $store->id) && 
+            if (!$user->hasRole('superadmin') &&
+                !$user->hasRole('owner', $store->id) &&
                 $store->user_id !== $user->uuid) {
                 return response()->json([
                     'success' => false,
@@ -159,20 +171,35 @@ class StoreController extends Controller
                 ], 403);
             }
 
-            $validator = Validator::make($request->all(), [
-                'nama_toko'     => 'required|string|min:3|max:50',
-                'subdomain'     => 'required|string|min:3|max:30|regex:/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/|unique:stores,subdomain,' . $store->id,
-                'no_hp_toko' => [
-                                    'required',
-                                    'string',
-                                    'regex:/^(?:\+62|62|0|8)[0-9]{8,13}$/'
-                                ],
-                'kategori_toko' => 'required|in:fashion,elektronik,makanan,kesehatan,rumah_tangga,olahraga,buku_media,otomotif,mainan_hobi,jasa,lainnya',
-                'deskripsi_toko'=> 'required|string|min:20|max:500',
-                'alamat'        => 'nullable|string|max:500',
-                'is_active'     => 'boolean'
-            ]);
+            // Make validation flexible - only validate fields that are present
+            $rules = [];
 
+            if ($request->has('nama_toko')) {
+                $rules['nama_toko'] = 'required|string|min:3|max:50';
+            }
+            if ($request->has('subdomain')) {
+                $rules['subdomain'] = 'required|string|min:3|max:30|regex:/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/|unique:stores,subdomain,' . $store->id;
+            }
+            if ($request->has('no_hp_toko')) {
+                $rules['no_hp_toko'] = 'required|string|regex:/^(?:\+62|62|0|8)[0-9]{8,13}$/';
+            }
+            if ($request->has('kategori_toko')) {
+                $rules['kategori_toko'] = 'required|in:fashion,elektronik,makanan,kesehatan,rumah_tangga,olahraga,buku_media,otomotif,mainan_hobi,jasa,lainnya';
+            }
+            if ($request->has('deskripsi_toko')) {
+                $rules['deskripsi_toko'] = 'required|string|min:20|max:500';
+            }
+            if ($request->has('alamat')) {
+                $rules['alamat'] = 'nullable|string|max:500';
+            }
+            if ($request->has('domain')) {
+                $rules['domain'] = 'nullable|string|max:255';
+            }
+            if ($request->has('is_active')) {
+                $rules['is_active'] = 'boolean';
+            }
+
+            $validator = Validator::make($request->all(), $rules);
 
             if ($validator->fails()) {
                 return response()->json([
@@ -201,6 +228,9 @@ class StoreController extends Controller
             }
             if ($request->has('alamat')) {
                 $updateData['alamat'] = $request->alamat;
+            }
+            if ($request->has('domain')) {
+                $updateData['domain'] = $request->domain;
             }
             if ($request->has('is_active')) {
                 $updateData['is_active'] = $request->is_active;
