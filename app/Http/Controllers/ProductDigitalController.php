@@ -61,7 +61,7 @@ class ProductDigitalController extends Controller
             'deskripsi' => 'nullable|string',
             'link_preview' => 'nullable|url',
             'link_download' => 'nullable|url',
-            'gambar' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'gambar' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp,svg,bmp,avif|max:2048',
             'is_active' => 'boolean',
         ]);
 
@@ -140,7 +140,7 @@ class ProductDigitalController extends Controller
             'deskripsi' => 'nullable|string',
             'link_preview' => 'nullable|url',
             'link_download' => 'nullable|url',
-            'gambar' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'gambar' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp,svg,bmp,avif|max:2048',
             'is_active' => 'boolean',
         ]);
 

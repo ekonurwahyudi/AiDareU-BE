@@ -118,7 +118,7 @@ class ProductController extends Controller
                 'jenis_produk' => 'required|in:digital,fisik',
                 'url_produk' => 'nullable|required_if:jenis_produk,digital|url',
                 'images' => 'nullable|array|max:10',
-                'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:5120', // 5MB max per image
+                'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp,svg,bmp,avif|max:5120', // 5MB max per image
                 'harga_produk' => 'required|numeric|min:0',
                 'harga_diskon' => 'nullable|numeric|min:0|lt:harga_produk',
                 'category_id' => 'required|exists:categories,id',
@@ -216,7 +216,7 @@ class ProductController extends Controller
                 'jenis_produk' => 'sometimes|required|in:digital,fisik',
                 'url_produk' => 'nullable|url',
                 'images' => 'nullable|array|max:10',
-                'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:5120',
+                'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp,svg,bmp,avif|max:5120',
                 'harga_produk' => 'sometimes|required|numeric|min:0',
                 'harga_diskon' => 'nullable|numeric|min:0',
                 'category_id' => 'sometimes|required|exists:categories,id',

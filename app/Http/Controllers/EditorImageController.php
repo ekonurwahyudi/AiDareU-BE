@@ -16,7 +16,7 @@ class EditorImageController extends Controller
     {
         try {
             $request->validate([
-                'image' => 'required|image|mimes:jpeg,png,jpg,gif|max:5120' // 5MB max
+                'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp,svg,bmp,avif|max:5120' // 5MB max
             ]);
 
             $image = $request->file('image');
