@@ -7,10 +7,13 @@ use App\Models\Order;
 use App\Models\DetailOrder;
 use App\Models\Store;
 use App\Models\BankAccount;
+use App\Models\User;
+use App\Mail\OrderCreated;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class CheckoutController extends Controller
 {
@@ -114,6 +117,35 @@ class CheckoutController extends Controller
 
             // Load relationships
             $order->load(['customer', 'store', 'bankAccount', 'detailOrders.product']);
+
+            // Generate checkout URL for email
+            // Format: https://{subdomain}.aidareu.com/checkout/{orderUuid}
+            $store = Store::where('uuid', $orderData['uuidStore'])->first();
+            $checkoutUrl = "https://{$store->subdomain}.aidareu.com/checkout/{$order->uuid}";
+
+            // Send email notification to customer
+            try {
+                if ($customer->email) {
+                    Mail::to($customer->email)->send(new OrderCreated($order, $checkoutUrl, false));
+                    Log::info("Order confirmation email sent to customer: {$customer->email}");
+                }
+            } catch (\Exception $e) {
+                Log::error("Failed to send customer email: " . $e->getMessage());
+                // Don't fail the whole request if email fails
+            }
+
+            // Send email notification to seller/store owner
+            try {
+                // Get store owner's email
+                $storeOwner = User::where('uuid', $store->user_id)->first();
+                if ($storeOwner && $storeOwner->email) {
+                    Mail::to($storeOwner->email)->send(new OrderCreated($order, $checkoutUrl, true));
+                    Log::info("New order notification email sent to seller: {$storeOwner->email}");
+                }
+            } catch (\Exception $e) {
+                Log::error("Failed to send seller email: " . $e->getMessage());
+                // Don't fail the whole request if email fails
+            }
 
             return response()->json([
                 'success' => true,
