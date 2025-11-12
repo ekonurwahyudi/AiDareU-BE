@@ -210,15 +210,15 @@
                 <table style="width: 100%;">
                     <tr>
                         <td style="padding: 5px 0;"><strong>Bank:</strong></td>
-                        <td style="padding: 5px 0;">{{ $order->bankAccount->nama_bank ?? '-' }}</td>
+                        <td style="padding: 5px 0;">{{ $order->bankAccount->bank_name ?? '-' }}</td>
                     </tr>
                     <tr>
                         <td style="padding: 5px 0;"><strong>No. Rekening:</strong></td>
-                        <td style="padding: 5px 0; font-size: 16px; font-weight: bold;">{{ $order->bankAccount->nomor_rekening ?? '-' }}</td>
+                        <td style="padding: 5px 0; font-size: 16px; font-weight: bold;">{{ $order->bankAccount->account_number ?? '-' }}</td>
                     </tr>
                     <tr>
                         <td style="padding: 5px 0;"><strong>Atas Nama:</strong></td>
-                        <td style="padding: 5px 0;">{{ $order->bankAccount->nama_pemilik ?? '-' }}</td>
+                        <td style="padding: 5px 0;">{{ $order->bankAccount->account_holder_name ?? '-' }}</td>
                     </tr>
                     <tr>
                         <td style="padding: 5px 0;"><strong>Jumlah Transfer:</strong></td>
@@ -230,7 +230,6 @@
             <div class="payment-info">
                 <h3>💳 Informasi Pembayaran</h3>
                 <p style="color: #f44336; margin: 10px 0;">⚠️ Informasi rekening bank belum tersedia. Silakan hubungi penjual untuk informasi pembayaran.</p>
-                <!-- Debug: Order UUID: {{ $order->uuid }}, Bank UUID: {{ $order->uuid_bank_account ?? 'null' }} -->
             </div>
             @endif
 

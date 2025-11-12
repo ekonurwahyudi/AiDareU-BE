@@ -137,9 +137,9 @@ class CheckoutController extends Controller
                 'uuid_bank_account' => $order->uuid_bank_account,
                 'bank_account_loaded' => $order->bankAccount ? 'yes' : 'no',
                 'bank_account_data' => $order->bankAccount ? [
-                    'nama_bank' => $order->bankAccount->nama_bank,
-                    'nomor_rekening' => $order->bankAccount->nomor_rekening,
-                    'nama_pemilik' => $order->bankAccount->nama_pemilik
+                    'bank_name' => $order->bankAccount->bank_name,
+                    'account_number' => $order->bankAccount->account_number,
+                    'account_holder_name' => $order->bankAccount->account_holder_name
                 ] : null
             ]);
 

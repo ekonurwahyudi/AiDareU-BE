@@ -193,7 +193,7 @@
                 @if($order->bankAccount)
                 <tr>
                     <th>Metode Pembayaran</th>
-                    <td>Transfer {{ $order->bankAccount->nama_bank }} - {{ $order->bankAccount->nomor_rekening }}</td>
+                    <td>Transfer {{ $order->bankAccount->bank_name }} - {{ $order->bankAccount->account_number }}</td>
                 </tr>
                 @endif
             </table>
