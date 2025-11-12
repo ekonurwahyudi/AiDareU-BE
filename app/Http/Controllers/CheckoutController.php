@@ -56,38 +56,18 @@ class CheckoutController extends Controller
             $orderData = $request->input('order');
             $items = $request->input('items');
 
-            // Check if customer exists by email or phone
-            $customer = Customer::where('uuid_store', $orderData['uuidStore'])
-                ->where(function ($query) use ($customerData) {
-                    $query->where('email', $customerData['email'])
-                        ->orWhere('no_hp', $customerData['noHp']);
-                })
-                ->first();
-
-            if ($customer) {
-                // Update existing customer
-                $customer->update([
-                    'nama' => $customerData['nama'],
-                    'no_hp' => $customerData['noHp'],
-                    'email' => $customerData['email'] ?? null,
-                    'provinsi' => $customerData['provinsi'],
-                    'kota' => $customerData['kota'],
-                    'kecamatan' => $customerData['kecamatan'],
-                    'alamat' => $customerData['alamat']
-                ]);
-            } else {
-                // Create new customer
-                $customer = Customer::create([
-                    'nama' => $customerData['nama'],
-                    'no_hp' => $customerData['noHp'],
-                    'email' => $customerData['email'] ?? null,
-                    'provinsi' => $customerData['provinsi'],
-                    'kota' => $customerData['kota'],
-                    'kecamatan' => $customerData['kecamatan'],
-                    'alamat' => $customerData['alamat'],
-                    'uuid_store' => $orderData['uuidStore']
-                ]);
-            }
+            // Always create new customer for each order
+            // This ensures each order has a unique customer record even if email/phone is the same
+            $customer = Customer::create([
+                'nama' => $customerData['nama'],
+                'no_hp' => $customerData['noHp'],
+                'email' => $customerData['email'] ?? null,
+                'provinsi' => $customerData['provinsi'],
+                'kota' => $customerData['kota'],
+                'kecamatan' => $customerData['kecamatan'],
+                'alamat' => $customerData['alamat'],
+                'uuid_store' => $orderData['uuidStore']
+            ]);
 
             // Create order (nomor_order will be auto-generated)
             $order = Order::create([
