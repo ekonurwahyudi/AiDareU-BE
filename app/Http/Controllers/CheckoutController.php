@@ -115,8 +115,21 @@ class CheckoutController extends Controller
 
             DB::commit();
 
-            // Load relationships
-            $order->load(['customer', 'store', 'bankAccount', 'detailOrders.product']);
+            // Load relationships with explicit eager loading
+            $order = Order::with([
+                'customer',
+                'store',
+                'bankAccount',
+                'detailOrders.product'
+            ])->find($order->id);
+
+            // If bankAccount not loaded, try to fetch it directly
+            if (!$order->bankAccount && $order->uuid_bank_account) {
+                $bankAccount = BankAccount::where('uuid', $order->uuid_bank_account)->first();
+                if ($bankAccount) {
+                    $order->setRelation('bankAccount', $bankAccount);
+                }
+            }
 
             // Log bank account info for debugging
             Log::info("Order created with bank account:", [
