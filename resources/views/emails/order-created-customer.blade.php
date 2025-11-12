@@ -210,21 +210,27 @@
                 <table style="width: 100%;">
                     <tr>
                         <td style="padding: 5px 0;"><strong>Bank:</strong></td>
-                        <td style="padding: 5px 0;">{{ $order->bankAccount->nama_bank }}</td>
+                        <td style="padding: 5px 0;">{{ $order->bankAccount->nama_bank ?? '-' }}</td>
                     </tr>
                     <tr>
                         <td style="padding: 5px 0;"><strong>No. Rekening:</strong></td>
-                        <td style="padding: 5px 0; font-size: 16px; font-weight: bold;">{{ $order->bankAccount->nomor_rekening }}</td>
+                        <td style="padding: 5px 0; font-size: 16px; font-weight: bold;">{{ $order->bankAccount->nomor_rekening ?? '-' }}</td>
                     </tr>
                     <tr>
                         <td style="padding: 5px 0;"><strong>Atas Nama:</strong></td>
-                        <td style="padding: 5px 0;">{{ $order->bankAccount->nama_pemilik }}</td>
+                        <td style="padding: 5px 0;">{{ $order->bankAccount->nama_pemilik ?? '-' }}</td>
                     </tr>
                     <tr>
                         <td style="padding: 5px 0;"><strong>Jumlah Transfer:</strong></td>
                         <td style="padding: 5px 0; font-size: 18px; font-weight: bold; color: #E91E63;">Rp. {{ number_format($order->total_harga, 0, ',', '.') }}</td>
                     </tr>
                 </table>
+            </div>
+            @else
+            <div class="payment-info">
+                <h3>💳 Informasi Pembayaran</h3>
+                <p style="color: #f44336; margin: 10px 0;">⚠️ Informasi rekening bank belum tersedia. Silakan hubungi penjual untuk informasi pembayaran.</p>
+                <!-- Debug: Order UUID: {{ $order->uuid }}, Bank UUID: {{ $order->uuid_bank_account ?? 'null' }} -->
             </div>
             @endif
 

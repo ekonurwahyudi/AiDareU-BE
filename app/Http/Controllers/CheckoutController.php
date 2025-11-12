@@ -118,6 +118,18 @@ class CheckoutController extends Controller
             // Load relationships
             $order->load(['customer', 'store', 'bankAccount', 'detailOrders.product']);
 
+            // Log bank account info for debugging
+            Log::info("Order created with bank account:", [
+                'order_uuid' => $order->uuid,
+                'uuid_bank_account' => $order->uuid_bank_account,
+                'bank_account_loaded' => $order->bankAccount ? 'yes' : 'no',
+                'bank_account_data' => $order->bankAccount ? [
+                    'nama_bank' => $order->bankAccount->nama_bank,
+                    'nomor_rekening' => $order->bankAccount->nomor_rekening,
+                    'nama_pemilik' => $order->bankAccount->nama_pemilik
+                ] : null
+            ]);
+
             // Generate checkout URL for email
             // Format: https://{subdomain}.aidareu.com/checkout/{orderUuid}
             $store = Store::where('uuid', $orderData['uuidStore'])->first();
@@ -131,6 +143,7 @@ class CheckoutController extends Controller
                 }
             } catch (\Exception $e) {
                 Log::error("Failed to send customer email: " . $e->getMessage());
+                Log::error("Email error details: " . $e->getTraceAsString());
                 // Don't fail the whole request if email fails
             }
 
