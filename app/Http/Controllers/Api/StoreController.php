@@ -268,7 +268,16 @@ class StoreController extends Controller
             if ($request->has('is_active')) {
                 $updateData['is_active'] = $request->is_active;
             }
-            
+            if ($request->has('provinsi')) {
+                $updateData['provinsi'] = $request->provinsi;
+            }
+            if ($request->has('kota')) {
+                $updateData['kota'] = $request->kota;
+            }
+            if ($request->has('kecamatan')) {
+                $updateData['kecamatan'] = $request->kecamatan;
+            }
+
             $store->update($updateData);
             $store->load('owner');
 
