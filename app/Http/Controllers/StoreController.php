@@ -466,18 +466,29 @@ class StoreController extends Controller
         }
 
         try {
-            $user = Auth::user();
-            
-            // Fallback authentication if no authenticated user
-            if (!$user) {
-                $targetUuid = 'e4fcfcba-63bc-41ff-a36c-11c6e57d16f8'; // Eko Wahyudi ST (Serba Ada owner)
-                $user = \App\Models\User::where('uuid', $targetUuid)->first();
+            $user = null;
+
+            // Try Sanctum auth first
+            if ($request->bearerToken()) {
+                $user = auth('sanctum')->user();
             }
-            
+
+            // Try web session auth
+            if (!$user) {
+                $user = auth('web')->user();
+            }
+
+            // Try X-User-UUID header
+            if (!$user && $request->header('X-User-UUID')) {
+                $userUuid = $request->header('X-User-UUID');
+                $user = User::where('uuid', $userUuid)->first();
+            }
+
             if (!$user) {
                 return response()->json([
-                    'message' => 'User not found'
-                ], 404);
+                    'success' => false,
+                    'message' => 'User not authenticated. Please login again.'
+                ], 401);
             }
             
             $store = Store::where('uuid', $uuid)
@@ -512,7 +523,16 @@ class StoreController extends Controller
                 $updateData['domain'] = $request->domain;
             }
             if ($request->has('no_hp_toko')) {
-                $updateData['phone'] = $request->no_hp_toko;
+                $phone = $request->no_hp_toko;
+                // Auto-convert phone starting with 8 to 628
+                if (preg_match('/^8[0-9]{8,13}$/', $phone)) {
+                    $phone = '62' . $phone;
+                }
+                // Convert phone starting with 0 to 62
+                elseif (preg_match('/^0[0-9]{9,13}$/', $phone)) {
+                    $phone = '62' . substr($phone, 1);
+                }
+                $updateData['phone'] = $phone;
             }
             if ($request->has('kategori_toko')) {
                 $updateData['category'] = $request->kategori_toko;
