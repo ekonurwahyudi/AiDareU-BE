@@ -159,7 +159,31 @@ class StoreController extends Controller
                 ], 404);
             }
 
-            $user = $request->user();
+            // Try multiple authentication methods
+            $user = null;
+
+            // Try Sanctum auth first
+            if ($request->bearerToken()) {
+                $user = auth('sanctum')->user();
+            }
+
+            // Try web session auth
+            if (!$user) {
+                $user = auth('web')->user();
+            }
+
+            // Try X-User-UUID header
+            if (!$user && $request->header('X-User-UUID')) {
+                $uuid = $request->header('X-User-UUID');
+                $user = User::where('uuid', $uuid)->first();
+            }
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not authenticated. Please login again.'
+                ], 401);
+            }
 
             // Check if user can update this store
             if (!$user->hasRole('superadmin') &&
@@ -218,7 +242,16 @@ class StoreController extends Controller
                 $updateData['subdomain'] = $request->subdomain;
             }
             if ($request->has('no_hp_toko')) {
-                $updateData['phone'] = $request->no_hp_toko;
+                $phone = $request->no_hp_toko;
+                // Auto-convert phone starting with 8 to 628
+                if (preg_match('/^8[0-9]{8,13}$/', $phone)) {
+                    $phone = '62' . $phone;
+                }
+                // Convert phone starting with 0 to 62
+                elseif (preg_match('/^0[0-9]{9,13}$/', $phone)) {
+                    $phone = '62' . substr($phone, 1);
+                }
+                $updateData['phone'] = $phone;
             }
             if ($request->has('kategori_toko')) {
                 $updateData['category'] = $request->kategori_toko;
