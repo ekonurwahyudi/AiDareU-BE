@@ -19,6 +19,23 @@
 /storage/*.key
 /storage/pail
 /vendor
+# Ignore symlink but not the directory it points to
+/public/storage
+# Ignore uploaded files (will be in Docker volume)
+/storage/app/public/*
+# But keep the directory structure
+!/storage/app/public/.gitkeep
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/storage/logs/*
+# Keep directory structure with .gitkeep files
+!/storage/framework/cache/.gitkeep
+!/storage/framework/sessions/.gitkeep
+!/storage/framework/views/.gitkeep
+!/storage/logs/.gitkeep
 Homestead.json
 Homestead.yaml
 Thumbs.db
+# Deployment script (optional, if you don't want to commit it)
+# deploy.sh
