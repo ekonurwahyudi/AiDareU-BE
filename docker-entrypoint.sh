@@ -56,13 +56,11 @@ if [ -e "public/storage" ] || [ -L "public/storage" ]; then
   rm -rf public/storage
 fi
 
-# Create symlink using Laravel's artisan command (PREFERRED METHOD)
-echo "  → Creating symlink with php artisan storage:link..."
-php artisan storage:link --force 2>&1 || {
-  echo "  ⚠️  Artisan storage:link failed, using manual method..."
-  # Fallback: Manual symlink creation with absolute path
-  ln -sf /var/www/html/storage/app/public /var/www/html/public/storage
-}
+# IMPORTANT: Use absolute path to prevent wrong nesting
+# Correct: public/storage -> /var/www/html/storage/app/public
+# Wrong:   public/storage -> storage/app (missing /public at end)
+echo "  → Creating symlink with absolute path..."
+ln -sf /var/www/html/storage/app/public /var/www/html/public/storage
 
 # Verify symlink was created successfully
 if [ -L "public/storage" ]; then
@@ -71,11 +69,21 @@ if [ -L "public/storage" ]; then
   echo "    Source: public/storage"
   echo "    Target: $SYMLINK_TARGET"
 
-  # Additional verification: check if target directory exists
-  if [ -d "$SYMLINK_TARGET" ] || [ -d "storage/app/public" ]; then
-    echo "    Target directory exists: OK"
+  # Verify target directory exists
+  if [ -d "$SYMLINK_TARGET" ]; then
+    echo "    ✓ Target directory exists"
+
+    # Verify files are accessible through symlink
+    if [ "$(ls -A public/storage/products 2>/dev/null)" ]; then
+      FILE_COUNT=$(ls -1 public/storage/products 2>/dev/null | wc -l)
+      echo "    ✓ Files accessible through symlink: $FILE_COUNT files in products/"
+    else
+      echo "    ⚠️  WARNING: No files found in public/storage/products/"
+    fi
   else
-    echo "    ⚠️  WARNING: Target directory does not exist!"
+    echo "    ⚠️  WARNING: Target directory does not exist at $SYMLINK_TARGET"
+    echo "    Creating target directory..."
+    mkdir -p storage/app/public
   fi
 else
   echo "  ✗ CRITICAL: Storage symlink creation FAILED!"
@@ -86,8 +94,17 @@ fi
 # Fix symlink ownership (use -h to change symlink itself, not target)
 chown -h www-data:www-data public/storage 2>/dev/null || true
 
-# Verify symlink is accessible
-ls -lah public/storage 2>/dev/null && echo "  ✓ Symlink is accessible" || echo "  ⚠️  Symlink access check failed"
+# Verify symlink structure is correct
+echo "  → Verifying symlink structure..."
+if [ -d "public/storage/products" ] && [ ! -d "public/storage/app" ]; then
+  echo "    ✓ Symlink structure is correct"
+  echo "    URL /storage/products/xxx.jpg will work correctly"
+else
+  echo "    ✗ ERROR: Symlink structure is WRONG!"
+  echo "    public/storage might be pointing to storage/app instead of storage/app/public"
+  echo "    This needs to be fixed immediately!"
+  exit 1
+fi
 
 # Cache config/views/routes (tidak wajib)
 php artisan config:cache || true
