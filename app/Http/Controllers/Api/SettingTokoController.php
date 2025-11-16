@@ -19,15 +19,27 @@ class SettingTokoController extends Controller
     public function getStoreBySubdomain($subdomain)
     {
         try {
-            // Find store by subdomain
-            $store = Store::where('subdomain', $subdomain)->first();
+            \Log::info("[SettingTokoController] getStoreBySubdomain called", ['subdomain' => $subdomain]);
+
+            // Find store by subdomain - must be active
+            $store = Store::where('subdomain', $subdomain)
+                          ->where('is_active', true)
+                          ->first();
 
             if (!$store) {
+                \Log::warning("[SettingTokoController] Store not found or inactive", ['subdomain' => $subdomain]);
                 return response()->json([
                     'success' => false,
-                    'message' => 'Store not found'
+                    'message' => 'Store not found or inactive'
                 ], 404);
             }
+
+            \Log::info("[SettingTokoController] Store found", [
+                'subdomain' => $subdomain,
+                'uuid' => $store->uuid,
+                'name' => $store->name,
+                'is_active' => $store->is_active
+            ]);
 
             $storeUuid = $store->uuid;
 
