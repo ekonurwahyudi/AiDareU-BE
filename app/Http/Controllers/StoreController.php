@@ -831,9 +831,9 @@ class StoreController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             $store = Store::where('user_id', $user->uuid)->first();
-            
+
             return response()->json([
                 'has_store' => !is_null($store),
                 'store_id' => $store ? $store->id : null,
@@ -843,6 +843,43 @@ class StoreController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Failed to check store status',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get store by custom domain (for Next.js middleware domain mapping)
+     * Public endpoint - no authentication required
+     */
+    public function getByDomain($domain)
+    {
+        try {
+            // Find store by domain field (bukan custom_domain)
+            $store = Store::findByCustomDomain($domain);
+
+            if (!$store || !$store->is_active) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Store not found or inactive'
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'uuid' => $store->uuid,
+                    'subdomain' => $store->subdomain,
+                    'domain' => $store->domain,
+                    'is_active' => $store->is_active,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error in getByDomain: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch store by domain',
                 'error' => $e->getMessage()
             ], 500);
         }
