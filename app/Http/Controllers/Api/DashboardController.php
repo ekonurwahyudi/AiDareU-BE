@@ -728,4 +728,49 @@ class DashboardController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get top stores by total orders (no store filter)
+     */
+    public function popularStoresAll(Request $request): JsonResponse
+    {
+        try {
+            $limit = $request->query('limit', 5);
+
+            // Get top stores by total orders
+            $popularStores = DB::table('orders')
+                ->join('stores', 'orders.uuid_store', '=', 'stores.uuid')
+                ->select(
+                    'stores.uuid',
+                    'stores.nama_toko as name',
+                    DB::raw('COUNT(orders.id) as total_orders'),
+                    DB::raw('SUM(CASE WHEN orders.status = "completed" THEN orders.total_harga ELSE 0 END) as total_revenue')
+                )
+                ->groupBy('stores.uuid', 'stores.nama_toko')
+                ->orderByDesc('total_orders')
+                ->limit($limit)
+                ->get();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Popular stores retrieved successfully',
+                'data' => $popularStores->map(function ($item) {
+                    return [
+                        'uuid' => $item->uuid,
+                        'name' => $item->name,
+                        'total_orders' => $item->total_orders,
+                        'total_revenue' => (float) $item->total_revenue
+                    ];
+                })
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error in DashboardController@popularStoresAll: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error retrieving popular stores: ' . $e->getMessage(),
+                'data' => null
+            ], 500);
+        }
+    }
 }

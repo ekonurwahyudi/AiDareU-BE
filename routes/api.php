@@ -244,6 +244,7 @@ Route::get('/dashboard/customers', [DashboardController::class, 'customers']);
 Route::get('/dashboard/stats/all', [DashboardController::class, 'statsAll']);
 Route::get('/dashboard/revenue/all', [DashboardController::class, 'revenueAll']);
 Route::get('/dashboard/popular-products/all', [DashboardController::class, 'popularProductsAll']);
+Route::get('/dashboard/popular-stores/all', [DashboardController::class, 'popularStoresAll']);
 
 // Public: Notification API (no auth required for testing)
 Route::get('/notifications/orders', [NotificationController::class, 'getOrderNotifications']);
