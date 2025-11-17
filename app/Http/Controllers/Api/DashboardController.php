@@ -583,4 +583,149 @@ class DashboardController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get all stores dashboard statistics (no store filter, no date filter)
+     */
+    public function statsAll(Request $request): JsonResponse
+    {
+        try {
+            // Get total orders (all time, all stores)
+            $totalOrders = DB::table('orders')->count();
+
+            // Total revenue (all completed orders, all time, all stores)
+            $totalRevenue = DB::table('orders')
+                ->where('status', 'completed')
+                ->sum('total_harga');
+
+            // Total products (active only, all stores)
+            $totalProducts = DB::table('products')
+                ->where('status_produk', 'active')
+                ->count();
+
+            // Total customers (all stores, all time)
+            $totalCustomers = DB::table('customers')->count();
+
+            // Total stores (active only)
+            $totalStores = DB::table('stores')
+                ->where('is_active', true)
+                ->count();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'All stores statistics retrieved successfully',
+                'data' => [
+                    'total_orders' => $totalOrders,
+                    'total_revenue' => (float) $totalRevenue,
+                    'total_products' => $totalProducts,
+                    'total_customers' => $totalCustomers,
+                    'total_stores' => $totalStores,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error in DashboardController@statsAll: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error retrieving all stores statistics: ' . $e->getMessage(),
+                'data' => null
+            ], 500);
+        }
+    }
+
+    /**
+     * Get all stores revenue data (all time, no filter)
+     */
+    public function revenueAll(Request $request): JsonResponse
+    {
+        try {
+            // Get all revenue data from all stores, all time
+            // Group by month for the last 12 months
+            $startDate = now()->subMonths(12)->startOfMonth();
+
+            $revenueData = DB::table('orders')
+                ->select(
+                    DB::raw('DATE_FORMAT(created_at, "%Y-%m") as month'),
+                    DB::raw('SUM(total_harga) as revenue'),
+                    DB::raw('COUNT(*) as orders')
+                )
+                ->where('created_at', '>=', $startDate)
+                ->where('status', 'completed')
+                ->groupBy('month')
+                ->orderBy('month')
+                ->get();
+
+            // Format data for frontend
+            $formattedData = $revenueData->map(function ($item) {
+                return [
+                    'date' => $item->month,
+                    'revenue' => (float) $item->revenue,
+                    'orders' => $item->orders
+                ];
+            });
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'All stores revenue data retrieved successfully',
+                'data' => $formattedData
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error in DashboardController@revenueAll: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error retrieving all stores revenue data: ' . $e->getMessage(),
+                'data' => null
+            ], 500);
+        }
+    }
+
+    /**
+     * Get all stores popular products (no store filter)
+     */
+    public function popularProductsAll(Request $request): JsonResponse
+    {
+        try {
+            $limit = $request->query('limit', 5);
+
+            // Get top selling products across all stores
+            $popularProducts = DB::table('detail_orders')
+                ->join('products', 'detail_orders.uuid_product', '=', 'products.uuid')
+                ->join('orders', 'detail_orders.uuid_order', '=', 'orders.uuid')
+                ->select(
+                    'products.uuid',
+                    'products.nama_produk as name',
+                    'products.upload_gambar_produk as image',
+                    DB::raw('SUM(detail_orders.quantity) as total_sold'),
+                    DB::raw('SUM(detail_orders.quantity * detail_orders.price) as revenue')
+                )
+                ->where('orders.status', 'completed')
+                ->groupBy('products.uuid', 'products.nama_produk', 'products.upload_gambar_produk')
+                ->orderByDesc('total_sold')
+                ->limit($limit)
+                ->get();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'All stores popular products retrieved successfully',
+                'data' => $popularProducts->map(function ($item) {
+                    return [
+                        'uuid' => $item->uuid,
+                        'name' => $item->name,
+                        'image' => $item->image,
+                        'total_sold' => $item->total_sold,
+                        'revenue' => (float) $item->revenue
+                    ];
+                })
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error in DashboardController@popularProductsAll: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Error retrieving all stores popular products: ' . $e->getMessage(),
+                'data' => null
+            ], 500);
+        }
+    }
 }

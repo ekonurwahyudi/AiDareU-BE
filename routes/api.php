@@ -240,6 +240,11 @@ Route::get('/dashboard/popular-products', [DashboardController::class, 'popularP
 Route::get('/dashboard/recent-orders', [DashboardController::class, 'recentOrders']);
 Route::get('/dashboard/customers', [DashboardController::class, 'customers']);
 
+// Public: Dashboard All Stores API (aggregate data from all stores)
+Route::get('/dashboard/stats/all', [DashboardController::class, 'statsAll']);
+Route::get('/dashboard/revenue/all', [DashboardController::class, 'revenueAll']);
+Route::get('/dashboard/popular-products/all', [DashboardController::class, 'popularProductsAll']);
+
 // Public: Notification API (no auth required for testing)
 Route::get('/notifications/orders', [NotificationController::class, 'getOrderNotifications']);
 Route::post('/notifications/orders/{orderUuid}/read', [NotificationController::class, 'markAsRead']);
