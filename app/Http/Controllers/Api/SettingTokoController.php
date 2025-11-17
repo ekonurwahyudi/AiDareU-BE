@@ -118,7 +118,9 @@ class SettingTokoController extends Controller
                     'store' => [
                         'uuid' => $store->uuid,
                         'name' => $store->name,
+                        'nama_toko' => $store->nama_toko,
                         'subdomain' => $store->subdomain,
+                        'phone' => $store->phone,
                         'logo' => $store->logo,
                         'description' => $store->description ?? null,
                     ],
