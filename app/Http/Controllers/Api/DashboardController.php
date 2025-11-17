@@ -644,38 +644,37 @@ class DashboardController extends Controller
             $startDate = now()->subMonths(12)->startOfMonth();
 
             $revenueData = DB::table('orders')
-                ->select(
-                    DB::raw('DATE_FORMAT(created_at, "%Y-%m") as month'),
-                    DB::raw('SUM(total_harga) as revenue'),
-                    DB::raw('COUNT(*) as orders')
-                )
+                ->selectRaw('DATE_FORMAT(created_at, "%Y-%m") as month, SUM(total_harga) as revenue, COUNT(*) as orders')
                 ->where('created_at', '>=', $startDate)
                 ->where('status', 'completed')
-                ->groupBy('month')
-                ->orderBy('month')
+                ->groupBy(DB::raw('DATE_FORMAT(created_at, "%Y-%m")'))
+                ->orderBy(DB::raw('DATE_FORMAT(created_at, "%Y-%m")'))
                 ->get();
 
             // Format data for frontend
             $formattedData = $revenueData->map(function ($item) {
                 return [
                     'date' => $item->month,
-                    'revenue' => (float) $item->revenue,
-                    'orders' => $item->orders
+                    'revenue' => (float) ($item->revenue ?? 0),
+                    'orders' => (int) ($item->orders ?? 0)
                 ];
             });
+
+            \Log::info('Revenue All Data:', ['count' => $formattedData->count(), 'data' => $formattedData->toArray()]);
 
             return response()->json([
                 'status' => 'success',
                 'message' => 'All stores revenue data retrieved successfully',
-                'data' => $formattedData
+                'data' => $formattedData->toArray()
             ]);
 
         } catch (\Exception $e) {
             \Log::error('Error in DashboardController@revenueAll: ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
             return response()->json([
                 'status' => 'error',
                 'message' => 'Error retrieving all stores revenue data: ' . $e->getMessage(),
-                'data' => null
+                'data' => []
             ], 500);
         }
     }
@@ -705,26 +704,31 @@ class DashboardController extends Controller
                 ->limit($limit)
                 ->get();
 
+            $formattedData = $popularProducts->map(function ($item) {
+                return [
+                    'uuid' => $item->uuid,
+                    'name' => $item->name,
+                    'image' => $item->image,
+                    'total_sold' => (int) ($item->total_sold ?? 0),
+                    'revenue' => (float) ($item->revenue ?? 0)
+                ];
+            });
+
+            \Log::info('Popular Products All Data:', ['count' => $formattedData->count(), 'data' => $formattedData->toArray()]);
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'All stores popular products retrieved successfully',
-                'data' => $popularProducts->map(function ($item) {
-                    return [
-                        'uuid' => $item->uuid,
-                        'name' => $item->name,
-                        'image' => $item->image,
-                        'total_sold' => $item->total_sold,
-                        'revenue' => (float) $item->revenue
-                    ];
-                })
+                'data' => $formattedData->toArray()
             ]);
 
         } catch (\Exception $e) {
             \Log::error('Error in DashboardController@popularProductsAll: ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
             return response()->json([
                 'status' => 'error',
                 'message' => 'Error retrieving all stores popular products: ' . $e->getMessage(),
-                'data' => null
+                'data' => []
             ], 500);
         }
     }
@@ -751,25 +755,30 @@ class DashboardController extends Controller
                 ->limit($limit)
                 ->get();
 
+            $formattedData = $popularStores->map(function ($item) {
+                return [
+                    'uuid' => $item->uuid,
+                    'name' => $item->name,
+                    'total_orders' => (int) ($item->total_orders ?? 0),
+                    'total_revenue' => (float) ($item->total_revenue ?? 0)
+                ];
+            });
+
+            \Log::info('Popular Stores All Data:', ['count' => $formattedData->count(), 'data' => $formattedData->toArray()]);
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'Popular stores retrieved successfully',
-                'data' => $popularStores->map(function ($item) {
-                    return [
-                        'uuid' => $item->uuid,
-                        'name' => $item->name,
-                        'total_orders' => $item->total_orders,
-                        'total_revenue' => (float) $item->total_revenue
-                    ];
-                })
+                'data' => $formattedData->toArray()
             ]);
 
         } catch (\Exception $e) {
             \Log::error('Error in DashboardController@popularStoresAll: ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
             return response()->json([
                 'status' => 'error',
                 'message' => 'Error retrieving popular stores: ' . $e->getMessage(),
-                'data' => null
+                'data' => []
             ], 500);
         }
     }
