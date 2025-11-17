@@ -245,7 +245,7 @@ class DashboardController extends Controller
             switch ($period) {
                 case 'week':
                     $startDate = now()->subWeeks(4);
-                    $groupBy = 'DATE(created_at)';
+                    $groupBy = "TO_CHAR(created_at, 'YYYY-MM-DD')";
                     break;
                 case 'year':
                     $startDate = now()->subYear();
@@ -640,15 +640,15 @@ class DashboardController extends Controller
     {
         try {
             // Get all revenue data from all stores, all time
-            // Group by month for the last 12 months
+            // Group by month for the last 12 months using PostgreSQL syntax
             $startDate = now()->subMonths(12)->startOfMonth();
 
             $revenueData = DB::table('orders')
-                ->selectRaw('DATE_FORMAT(created_at, "%Y-%m") as month, SUM(total_harga) as revenue, COUNT(*) as orders')
+                ->selectRaw("TO_CHAR(created_at, 'YYYY-MM') as month, SUM(total_harga) as revenue, COUNT(*) as orders")
                 ->where('created_at', '>=', $startDate)
                 ->where('status', 'completed')
-                ->groupBy(DB::raw('DATE_FORMAT(created_at, "%Y-%m")'))
-                ->orderBy(DB::raw('DATE_FORMAT(created_at, "%Y-%m")'))
+                ->groupBy(DB::raw("TO_CHAR(created_at, 'YYYY-MM')"))
+                ->orderBy(DB::raw("TO_CHAR(created_at, 'YYYY-MM')"))
                 ->get();
 
             // Format data for frontend
@@ -688,27 +688,30 @@ class DashboardController extends Controller
             $limit = $request->query('limit', 5);
 
             // Get top selling products across all stores
+            // Note: Don't group by JSON column (upload_gambar_produk)
             $popularProducts = DB::table('detail_orders')
                 ->join('products', 'detail_orders.uuid_product', '=', 'products.uuid')
                 ->join('orders', 'detail_orders.uuid_order', '=', 'orders.uuid')
                 ->select(
                     'products.uuid',
                     'products.nama_produk as name',
-                    'products.upload_gambar_produk as image',
                     DB::raw('SUM(detail_orders.quantity) as total_sold'),
                     DB::raw('SUM(detail_orders.quantity * detail_orders.price) as revenue')
                 )
                 ->where('orders.status', 'completed')
-                ->groupBy('products.uuid', 'products.nama_produk', 'products.upload_gambar_produk')
+                ->groupBy('products.uuid', 'products.nama_produk')
                 ->orderByDesc('total_sold')
                 ->limit($limit)
                 ->get();
 
+            // Get images separately for each product
             $formattedData = $popularProducts->map(function ($item) {
+                $product = DB::table('products')->where('uuid', $item->uuid)->first();
+
                 return [
                     'uuid' => $item->uuid,
                     'name' => $item->name,
-                    'image' => $item->image,
+                    'image' => $product ? $product->upload_gambar_produk : null,
                     'total_sold' => (int) ($item->total_sold ?? 0),
                     'revenue' => (float) ($item->revenue ?? 0)
                 ];
@@ -748,7 +751,7 @@ class DashboardController extends Controller
                     'stores.uuid',
                     'stores.nama_toko as name',
                     DB::raw('COUNT(orders.id) as total_orders'),
-                    DB::raw('SUM(CASE WHEN orders.status = "completed" THEN orders.total_harga ELSE 0 END) as total_revenue')
+                    DB::raw("SUM(CASE WHEN orders.status = 'completed' THEN orders.total_harga ELSE 0 END) as total_revenue")
                 )
                 ->groupBy('stores.uuid', 'stores.nama_toko')
                 ->orderByDesc('total_orders')
