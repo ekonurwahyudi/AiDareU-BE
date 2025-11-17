@@ -621,7 +621,9 @@ class DashboardController extends Controller
                     'total_customers' => $totalCustomers,
                     'total_stores' => $totalStores,
                 ]
-            ]);
+            ])->header('Access-Control-Allow-Origin', '*')
+              ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+              ->header('Access-Control-Allow-Headers', '*');
 
         } catch (\Exception $e) {
             \Log::error('Error in DashboardController@statsAll: ' . $e->getMessage());
@@ -629,7 +631,7 @@ class DashboardController extends Controller
                 'status' => 'error',
                 'message' => 'Error retrieving all stores statistics: ' . $e->getMessage(),
                 'data' => null
-            ], 500);
+            ], 500)->header('Access-Control-Allow-Origin', '*');
         }
     }
 
@@ -666,7 +668,9 @@ class DashboardController extends Controller
                 'status' => 'success',
                 'message' => 'All stores revenue data retrieved successfully',
                 'data' => $formattedData->toArray()
-            ]);
+            ])->header('Access-Control-Allow-Origin', '*')
+              ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+              ->header('Access-Control-Allow-Headers', '*');
 
         } catch (\Exception $e) {
             \Log::error('Error in DashboardController@revenueAll: ' . $e->getMessage());
@@ -675,7 +679,7 @@ class DashboardController extends Controller
                 'status' => 'error',
                 'message' => 'Error retrieving all stores revenue data: ' . $e->getMessage(),
                 'data' => []
-            ], 500);
+            ], 500)->header('Access-Control-Allow-Origin', '*');
         }
     }
 
@@ -723,7 +727,9 @@ class DashboardController extends Controller
                 'status' => 'success',
                 'message' => 'All stores popular products retrieved successfully',
                 'data' => $formattedData->toArray()
-            ]);
+            ])->header('Access-Control-Allow-Origin', '*')
+              ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+              ->header('Access-Control-Allow-Headers', '*');
 
         } catch (\Exception $e) {
             \Log::error('Error in DashboardController@popularProductsAll: ' . $e->getMessage());
@@ -732,7 +738,7 @@ class DashboardController extends Controller
                 'status' => 'error',
                 'message' => 'Error retrieving all stores popular products: ' . $e->getMessage(),
                 'data' => []
-            ], 500);
+            ], 500)->header('Access-Control-Allow-Origin', '*');
         }
     }
 
@@ -773,7 +779,9 @@ class DashboardController extends Controller
                 'status' => 'success',
                 'message' => 'Popular stores retrieved successfully',
                 'data' => $formattedData->toArray()
-            ]);
+            ])->header('Access-Control-Allow-Origin', '*')
+              ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+              ->header('Access-Control-Allow-Headers', '*');
 
         } catch (\Exception $e) {
             \Log::error('Error in DashboardController@popularStoresAll: ' . $e->getMessage());
@@ -782,7 +790,7 @@ class DashboardController extends Controller
                 'status' => 'error',
                 'message' => 'Error retrieving popular stores: ' . $e->getMessage(),
                 'data' => []
-            ], 500);
+            ], 500)->header('Access-Control-Allow-Origin', '*');
         }
     }
 }
