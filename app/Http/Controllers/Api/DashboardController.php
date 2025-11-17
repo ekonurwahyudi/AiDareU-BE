@@ -755,11 +755,12 @@ class DashboardController extends Controller
                 ->join('stores', 'orders.uuid_store', '=', 'stores.uuid')
                 ->select(
                     'stores.uuid',
-                    'stores.nama_toko as name',
+                    'stores.name',
+                    'stores.sub_domain as subdomain',
                     DB::raw('COUNT(orders.id) as total_orders'),
                     DB::raw("SUM(CASE WHEN orders.status = 'completed' THEN orders.total_harga ELSE 0 END) as total_revenue")
                 )
-                ->groupBy('stores.uuid', 'stores.nama_toko')
+                ->groupBy('stores.uuid', 'stores.name', 'stores.sub_domain')
                 ->orderByDesc('total_orders')
                 ->limit($limit)
                 ->get();
@@ -768,6 +769,7 @@ class DashboardController extends Controller
                 return [
                     'uuid' => $item->uuid,
                     'name' => $item->name,
+                    'subdomain' => $item->subdomain,
                     'total_orders' => (int) ($item->total_orders ?? 0),
                     'total_revenue' => (float) ($item->total_revenue ?? 0)
                 ];
