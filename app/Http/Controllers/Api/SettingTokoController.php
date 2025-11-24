@@ -108,7 +108,8 @@ class SettingTokoController extends Controller
                         'isNew' => $product->created_at->diffInDays(now()) <= 30,
                         'inStock' => ($product->stock ?? 0) > 0,
                         'storeUuid' => $product->uuid_store,
-                        'jenis_produk' => $product->jenis_produk ?? 'fisik'
+                        'jenis_produk' => $product->jenis_produk ?? 'fisik',
+                        'url_produk' => $product->url_produk ?? null
                     ];
                 });
 
