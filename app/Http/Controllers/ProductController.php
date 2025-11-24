@@ -115,8 +115,8 @@ class ProductController extends Controller
                 'uuid_store' => 'required|exists:stores,uuid',
                 'nama_produk' => 'required|string|max:255',
                 'deskripsi' => 'nullable|string',
-                'jenis_produk' => 'required|in:digital,fisik',
-                'url_produk' => 'nullable|required_if:jenis_produk,digital|url',
+                'jenis_produk' => 'required|in:digital,fisik,affiliate,jasa',
+                'url_produk' => 'nullable|required_if:jenis_produk,digital|required_if:jenis_produk,affiliate|url',
                 'images' => 'nullable|array|max:10',
                 'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp,svg,bmp,avif|max:5120', // 5MB max per image
                 'harga_produk' => 'required|numeric|min:0',
@@ -213,7 +213,7 @@ class ProductController extends Controller
             $rules = [
                 'nama_produk' => 'sometimes|required|string|max:255',
                 'deskripsi' => 'nullable|string',
-                'jenis_produk' => 'sometimes|required|in:digital,fisik',
+                'jenis_produk' => 'sometimes|required|in:digital,fisik,affiliate,jasa',
                 'url_produk' => 'nullable|url',
                 'images' => 'nullable|array|max:10',
                 'images.*' => 'image|mimes:jpeg,png,jpg,gif,webp,svg,bmp,avif|max:5120',
