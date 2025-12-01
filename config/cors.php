@@ -42,9 +42,9 @@ return [
         '/^https?:\/\/\d+\.\d+\.\d+\.\d+(:\d+)?$/i',
         // Production - aidareu.com subdomains (allow both http and https)
         '/^https?:\/\/([a-z0-9-]+\.)?aidareu\.com$/i',
-        // Custom domains for multi-tenant stores (any domain)
-        // This allows all custom domains like aidareu.site, tokosaya.com, etc.
-        '/^https?:\/\/[a-z0-9-]+\.[a-z]{2,}$/i',
+        // Custom domains for multi-tenant stores (any domain with any level of subdomains)
+        // This allows all custom domains like aidareu.site, tokosaya.com, kki-kediri.web.id, etc.
+        '/^https?:\/\/([a-z0-9-]+\.)*[a-z0-9-]+\.[a-z]{2,}$/i',
         // Deployment platforms
         '/^https?:\/\/([a-z0-9-]+\.)?railway\.app$/i',
         '/^https?:\/\/([a-z0-9-]+\.)?vercel\.app$/i',
