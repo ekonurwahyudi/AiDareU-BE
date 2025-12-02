@@ -88,8 +88,18 @@ class ProductController extends Controller
                 $query->where('nama_produk', 'LIKE', '%' . $request->search . '%');
             }
 
+            // Get pagination parameters
+            $perPage = $request->get('per_page', 10);
+            $page = $request->get('page', 1);
+
+            \Log::info('Product pagination', [
+                'per_page' => $perPage,
+                'page' => $page,
+                'request_params' => $request->all()
+            ]);
+
             $products = $query->orderBy('created_at', 'desc')
-                ->paginate($request->get('per_page', 10));
+                ->paginate($perPage);
 
             return response()->json([
                 'status' => 'success',
