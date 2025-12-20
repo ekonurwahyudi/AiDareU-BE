@@ -204,6 +204,11 @@
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
                         <strong>{{ $detail->product->nama_produk }}</strong><br>
+                        @if($detail->variant_name && $detail->variant_option)
+                        <small style="color: #6c757d; display: block; margin-top: 3px;">
+                            {{ $detail->variant_name }}: {{ $detail->variant_option }}
+                        </small>
+                        @endif
                         <small style="color: #6c757d;">{{ $detail->quantity }}x Rp. {{ number_format($detail->price, 0, ',', '.') }}</small>
                     </div>
                     <div style="font-weight: bold;">
