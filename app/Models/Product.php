@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 class Product extends Model
@@ -28,6 +29,8 @@ class Product extends Model
         'sku',
         'meta_description',
         'meta_keywords',
+        'berat_produk',
+        'size_guide_image',
     ];
 
     protected $casts = [
@@ -35,6 +38,7 @@ class Product extends Model
         'harga_produk' => 'decimal:2',
         'harga_diskon' => 'decimal:2',
         'stock' => 'integer',
+        'berat_produk' => 'integer',
     ];
 
     protected static function boot()
@@ -182,7 +186,23 @@ class Product extends Model
         if ($this->jenis_produk === 'digital') {
             return true; // Digital products are always in stock
         }
-        
+
         return $this->stock > 0;
+    }
+
+    /**
+     * Relationship with product variants
+     */
+    public function variants(): HasMany
+    {
+        return $this->hasMany(ProductVariant::class, 'product_uuid', 'uuid');
+    }
+
+    /**
+     * Check if product has variants
+     */
+    public function getHasVariantsAttribute(): bool
+    {
+        return $this->variants()->exists();
     }
 }

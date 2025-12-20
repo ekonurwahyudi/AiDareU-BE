@@ -3,12 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Models\ProductVariant;
+use App\Models\ProductVariantOption;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class ProductController extends Controller
@@ -135,49 +138,180 @@ class ProductController extends Controller
                 'status_produk' => 'in:active,inactive,draft',
                 'stock' => 'nullable|integer|min:0',
                 'meta_description' => 'nullable|string|max:160',
-                'meta_keywords' => 'nullable|string'
+                'meta_keywords' => 'nullable|string',
+                'berat_produk' => 'nullable|integer|min:1',
+                'size_guide_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120',
+                'variants' => 'nullable|array',
+                'variants.*.variant_name' => 'required|string|max:255',
+                'variants.*.options' => 'required|array|min:1',
+                'variants.*.options.*.option_name' => 'required|string|max:255',
+                'variants.*.options.*.harga' => 'nullable|numeric|min:0',
+                'variants.*.options.*.stock' => 'nullable|integer|min:0',
+            ], [
+                // Store validation messages
+                'uuid_store.required' => 'Toko harus dipilih',
+                'uuid_store.exists' => 'Toko yang dipilih tidak valid',
+
+                // Product name validation messages
+                'nama_produk.required' => 'Nama produk harus diisi',
+                'nama_produk.max' => 'Nama produk maksimal 255 karakter',
+
+                // Product type validation messages
+                'jenis_produk.required' => 'Jenis produk harus dipilih',
+                'jenis_produk.in' => 'Jenis produk tidak valid. Pilih: Digital, Fisik, Affiliate, atau Jasa',
+
+                // URL validation messages
+                'url_produk.required_if' => 'URL produk wajib diisi untuk produk digital dan affiliate',
+                'url_produk.url' => 'Format URL tidak valid. Contoh: https://example.com',
+
+                // Images validation messages
+                'images.max' => 'Maksimal 10 gambar yang bisa diupload',
+                'images.*.image' => 'File harus berupa gambar',
+                'images.*.mimes' => 'Format gambar harus JPG, PNG, GIF, WebP, SVG, BMP, atau AVIF',
+                'images.*.max' => 'Ukuran gambar maksimal 5 MB',
+
+                // Price validation messages
+                'harga_produk.required' => 'Harga produk harus diisi',
+                'harga_produk.numeric' => 'Harga produk harus berupa angka',
+                'harga_produk.min' => 'Harga produk tidak boleh negatif',
+
+                // Discount price validation messages
+                'harga_diskon.numeric' => 'Harga diskon harus berupa angka',
+                'harga_diskon.min' => 'Harga diskon tidak boleh negatif',
+                'harga_diskon.lt' => 'Harga diskon harus lebih kecil dari harga produk',
+
+                // Category validation messages
+                'category_id.required' => 'Kategori produk harus dipilih',
+                'category_id.exists' => 'Kategori yang dipilih tidak valid',
+
+                // Status validation messages
+                'status_produk.in' => 'Status produk tidak valid. Pilih: Aktif, Tidak Aktif, atau Draft',
+
+                // Stock validation messages
+                'stock.integer' => 'Stok harus berupa angka bulat',
+                'stock.min' => 'Stok tidak boleh negatif',
+
+                // Weight validation messages
+                'berat_produk.integer' => 'Berat produk harus berupa angka bulat (dalam gram)',
+                'berat_produk.min' => 'Berat produk minimal 1 gram',
+
+                // Size guide validation messages
+                'size_guide_image.image' => 'File panduan ukuran harus berupa gambar',
+                'size_guide_image.mimes' => 'Format gambar panduan ukuran harus JPG, PNG, atau GIF',
+                'size_guide_image.max' => 'Ukuran gambar panduan ukuran maksimal 5 MB',
+
+                // Variant validation messages
+                'variants.*.variant_name.required' => 'Nama varian harus diisi',
+                'variants.*.variant_name.max' => 'Nama varian maksimal 255 karakter',
+                'variants.*.options.required' => 'Opsi varian harus diisi',
+                'variants.*.options.min' => 'Minimal 1 opsi varian harus ditambahkan',
+                'variants.*.options.*.option_name.required' => 'Nama opsi varian harus diisi',
+                'variants.*.options.*.option_name.max' => 'Nama opsi varian maksimal 255 karakter',
+                'variants.*.options.*.harga.numeric' => 'Harga varian harus berupa angka',
+                'variants.*.options.*.harga.min' => 'Harga varian tidak boleh negatif',
+                'variants.*.options.*.stock.integer' => 'Stok varian harus berupa angka bulat',
+                'variants.*.options.*.stock.min' => 'Stok varian tidak boleh negatif',
             ]);
 
             if ($validator->fails()) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Validation failed',
+                    'message' => 'Validasi gagal. Mohon periksa kembali data yang Anda masukkan.',
                     'errors' => $validator->errors()
                 ], 422);
             }
 
-            // Handle image uploads
-            $imagePaths = [];
-            if ($request->hasFile('images')) {
-                foreach ($request->file('images') as $index => $image) {
-                    if ($index >= 10) break; // Limit to 10 images
-                    
-                    $filename = Str::uuid() . '.' . $image->getClientOriginalExtension();
-                    $path = $image->storeAs('products', $filename, 'public');
-                    $imagePaths[] = $path;
+            DB::beginTransaction();
+
+            try {
+                // Handle product image uploads
+                $imagePaths = [];
+                if ($request->hasFile('images')) {
+                    foreach ($request->file('images') as $index => $image) {
+                        if ($index >= 10) break; // Limit to 10 images
+
+                        $filename = Str::uuid() . '.' . $image->getClientOriginalExtension();
+                        $path = $image->storeAs('products', $filename, 'public');
+                        $imagePaths[] = $path;
+                    }
                 }
+
+                // Handle size guide image upload
+                $sizeGuidePath = null;
+                if ($request->hasFile('size_guide_image')) {
+                    $sizeGuideFile = $request->file('size_guide_image');
+                    $filename = 'size-guide-' . Str::uuid() . '.' . $sizeGuideFile->getClientOriginalExtension();
+                    $sizeGuidePath = $sizeGuideFile->storeAs('size-guides', $filename, 'public');
+                }
+
+                $productData = $request->except(['images', 'size_guide_image', 'variants']);
+                $productData['upload_gambar_produk'] = $imagePaths;
+                $productData['size_guide_image'] = $sizeGuidePath;
+
+                // Set default berat if not provided
+                if (!$request->has('berat_produk')) {
+                    $productData['berat_produk'] = 1000; // Default 1kg
+                }
+
+                // Set default stock for physical products
+                if ($request->jenis_produk === 'fisik' && !$request->has('stock')) {
+                    $productData['stock'] = 0;
+                }
+
+                // Create product
+                $product = Product::create($productData);
+
+                // Handle variants if provided
+                if ($request->has('variants') && is_array($request->variants)) {
+                    foreach ($request->variants as $variantData) {
+                        $variant = ProductVariant::create([
+                            'product_uuid' => $product->uuid,
+                            'variant_name' => $variantData['variant_name']
+                        ]);
+
+                        // Create variant options
+                        if (isset($variantData['options']) && is_array($variantData['options'])) {
+                            foreach ($variantData['options'] as $optionData) {
+                                ProductVariantOption::create([
+                                    'variant_uuid' => $variant->uuid,
+                                    'option_name' => $optionData['option_name'],
+                                    'harga' => $optionData['harga'] ?? null,
+                                    'stock' => $optionData['stock'] ?? 0,
+                                ]);
+                            }
+                        }
+                    }
+                }
+
+                DB::commit();
+
+                $product->load(['category:id,judul_kategori', 'store:uuid,name', 'variants.options']);
+
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Product created successfully',
+                    'data' => $product
+                ], 201);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+
+                // Clean up uploaded files on error
+                if (!empty($imagePaths)) {
+                    foreach ($imagePaths as $path) {
+                        Storage::disk('public')->delete($path);
+                    }
+                }
+                if ($sizeGuidePath) {
+                    Storage::disk('public')->delete($sizeGuidePath);
+                }
+
+                throw $e;
             }
-
-            $productData = $request->except(['images']);
-            $productData['upload_gambar_produk'] = $imagePaths;
-            
-            // Set default stock for physical products
-            if ($request->jenis_produk === 'fisik' && !$request->has('stock')) {
-                $productData['stock'] = 0;
-            }
-
-            $product = Product::create($productData);
-            $product->load(['category:id,judul_kategori', 'store:uuid,name']);
-
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Product created successfully',
-                'data' => $product
-            ], 201);
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to create product',
+                'message' => 'Gagal membuat produk. Silakan coba lagi.',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -189,7 +323,7 @@ class ProductController extends Controller
     public function show(Product $product): JsonResponse
     {
         try {
-            $product->load(['category:id,judul_kategori', 'store:uuid,name']);
+            $product->load(['category:id,judul_kategori', 'store:uuid,name', 'variants.options']);
 
             return response()->json([
                 'status' => 'success',
@@ -234,19 +368,69 @@ class ProductController extends Controller
                 'stock' => 'nullable|integer|min:0',
                 'meta_description' => 'nullable|string|max:160',
                 'meta_keywords' => 'nullable|string',
+                'berat_produk' => 'nullable|integer|min:1',
+                'size_guide_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120',
                 '_method' => 'nullable|string' // Allow _method field
             ];
 
-            $validator = Validator::make($request->all(), $rules);
-            
+            $messages = [
+                // Product name validation messages
+                'nama_produk.required' => 'Nama produk harus diisi',
+                'nama_produk.max' => 'Nama produk maksimal 255 karakter',
+
+                // Product type validation messages
+                'jenis_produk.required' => 'Jenis produk harus dipilih',
+                'jenis_produk.in' => 'Jenis produk tidak valid. Pilih: Digital, Fisik, Affiliate, atau Jasa',
+
+                // URL validation messages
+                'url_produk.url' => 'Format URL tidak valid. Contoh: https://example.com',
+
+                // Images validation messages
+                'images.max' => 'Maksimal 10 gambar yang bisa diupload',
+                'images.*.image' => 'File harus berupa gambar',
+                'images.*.mimes' => 'Format gambar harus JPG, PNG, GIF, WebP, SVG, BMP, atau AVIF',
+                'images.*.max' => 'Ukuran gambar maksimal 5 MB',
+
+                // Price validation messages
+                'harga_produk.required' => 'Harga produk harus diisi',
+                'harga_produk.numeric' => 'Harga produk harus berupa angka',
+                'harga_produk.min' => 'Harga produk tidak boleh negatif',
+
+                // Discount price validation messages
+                'harga_diskon.numeric' => 'Harga diskon harus berupa angka',
+                'harga_diskon.min' => 'Harga diskon tidak boleh negatif',
+
+                // Category validation messages
+                'category_id.required' => 'Kategori produk harus dipilih',
+                'category_id.exists' => 'Kategori yang dipilih tidak valid',
+
+                // Status validation messages
+                'status_produk.in' => 'Status produk tidak valid. Pilih: Aktif, Tidak Aktif, atau Draft',
+
+                // Stock validation messages
+                'stock.integer' => 'Stok harus berupa angka bulat',
+                'stock.min' => 'Stok tidak boleh negatif',
+
+                // Weight validation messages
+                'berat_produk.integer' => 'Berat produk harus berupa angka bulat (dalam gram)',
+                'berat_produk.min' => 'Berat produk minimal 1 gram',
+
+                // Size guide validation messages
+                'size_guide_image.image' => 'File panduan ukuran harus berupa gambar',
+                'size_guide_image.mimes' => 'Format gambar panduan ukuran harus JPG, PNG, atau GIF',
+                'size_guide_image.max' => 'Ukuran gambar panduan ukuran maksimal 5 MB',
+            ];
+
+            $validator = Validator::make($request->all(), $rules, $messages);
+
             // Add custom validation for discount price
             $validator->after(function ($validator) use ($request) {
                 if ($request->has('harga_diskon') && $request->has('harga_produk')) {
                     $discountPrice = $request->harga_diskon;
                     $regularPrice = $request->harga_produk;
-                    
+
                     if ($discountPrice && $regularPrice && (float)$discountPrice >= (float)$regularPrice) {
-                        $validator->errors()->add('harga_diskon', 'Harga diskon harus lebih kecil dari harga produk.');
+                        $validator->errors()->add('harga_diskon', 'Harga diskon harus lebih kecil dari harga produk');
                     }
                 }
             });
@@ -254,7 +438,7 @@ class ProductController extends Controller
             if ($validator->fails()) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Validation failed',
+                    'message' => 'Validasi gagal. Mohon periksa kembali data yang Anda masukkan.',
                     'errors' => $validator->errors()
                 ], 422);
             }
