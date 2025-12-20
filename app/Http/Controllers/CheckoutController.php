@@ -88,7 +88,9 @@ class CheckoutController extends Controller
                     'uuid_order' => $order->uuid,
                     'uuid_product' => $item['uuidProduct'],
                     'quantity' => $item['quantity'],
-                    'price' => $item['price']
+                    'price' => $item['price'],
+                    'variant_name' => $item['variant_name'] ?? null,
+                    'variant_option' => $item['variant_option'] ?? null
                 ]);
                 $detailOrders[] = $detailOrder;
             }

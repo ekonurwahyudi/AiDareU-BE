@@ -17,7 +17,9 @@ class DetailOrder extends Model
         'uuid_order',
         'uuid_product',
         'quantity',
-        'price'
+        'price',
+        'variant_name',
+        'variant_option'
     ];
 
     protected $casts = [
