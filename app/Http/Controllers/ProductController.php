@@ -443,8 +443,8 @@ class ProductController extends Controller
                 ], 422);
             }
 
-            $updateData = $request->except(['images', '_method']);
-            
+            $updateData = $request->except(['images', 'size_guide_image', '_method']);
+
             // Handle empty values that should be set to null
             if (array_key_exists('harga_diskon', $updateData) && $updateData['harga_diskon'] === '') {
                 $updateData['harga_diskon'] = null;
@@ -458,7 +458,10 @@ class ProductController extends Controller
             if (array_key_exists('stock', $updateData) && $updateData['stock'] === '') {
                 $updateData['stock'] = 0;
             }
-            
+            if (array_key_exists('berat_produk', $updateData) && $updateData['berat_produk'] === '') {
+                $updateData['berat_produk'] = 1000; // Default 1kg
+            }
+
             // Handle new image uploads
             if ($request->hasFile('images')) {
                 // Delete old images
@@ -471,13 +474,26 @@ class ProductController extends Controller
                 $imagePaths = [];
                 foreach ($request->file('images') as $index => $image) {
                     if ($index >= 10) break; // Limit to 10 images
-                    
+
                     $filename = Str::uuid() . '.' . $image->getClientOriginalExtension();
                     $path = $image->storeAs('products', $filename, 'public');
                     $imagePaths[] = $path;
                 }
-                
+
                 $updateData['upload_gambar_produk'] = $imagePaths;
+            }
+
+            // Handle size guide image upload
+            if ($request->hasFile('size_guide_image')) {
+                // Delete old size guide image
+                if ($product->size_guide_image) {
+                    Storage::disk('public')->delete($product->size_guide_image);
+                }
+
+                $sizeGuideFile = $request->file('size_guide_image');
+                $filename = 'size-guide-' . Str::uuid() . '.' . $sizeGuideFile->getClientOriginalExtension();
+                $sizeGuidePath = $sizeGuideFile->storeAs('size-guides', $filename, 'public');
+                $updateData['size_guide_image'] = $sizeGuidePath;
             }
 
             $updated = $product->update($updateData);
