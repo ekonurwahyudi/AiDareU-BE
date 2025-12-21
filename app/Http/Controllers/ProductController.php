@@ -483,8 +483,16 @@ class ProductController extends Controller
                 $updateData['upload_gambar_produk'] = $imagePaths;
             }
 
+            // Handle size guide image removal
+            if ($request->has('remove_size_guide') && $request->remove_size_guide == '1') {
+                // Delete old size guide image
+                if ($product->size_guide_image) {
+                    Storage::disk('public')->delete($product->size_guide_image);
+                }
+                $updateData['size_guide_image'] = null;
+            }
             // Handle size guide image upload
-            if ($request->hasFile('size_guide_image')) {
+            elseif ($request->hasFile('size_guide_image')) {
                 // Delete old size guide image
                 if ($product->size_guide_image) {
                     Storage::disk('public')->delete($product->size_guide_image);
