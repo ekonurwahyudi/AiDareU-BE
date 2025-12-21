@@ -370,6 +370,12 @@ class ProductController extends Controller
                 'meta_keywords' => 'nullable|string',
                 'berat_produk' => 'nullable|integer|min:1',
                 'size_guide_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120',
+                'variants' => 'nullable|array',
+                'variants.*.variant_name' => 'required|string|max:255',
+                'variants.*.options' => 'required|array|min:1',
+                'variants.*.options.*.option_name' => 'required|string|max:255',
+                'variants.*.options.*.harga' => 'nullable|numeric|min:0',
+                'variants.*.options.*.stock' => 'nullable|integer|min:0',
                 '_method' => 'nullable|string' // Allow _method field
             ];
 
@@ -419,6 +425,18 @@ class ProductController extends Controller
                 'size_guide_image.image' => 'File panduan ukuran harus berupa gambar',
                 'size_guide_image.mimes' => 'Format gambar panduan ukuran harus JPG, PNG, atau GIF',
                 'size_guide_image.max' => 'Ukuran gambar panduan ukuran maksimal 5 MB',
+
+                // Variant validation messages
+                'variants.*.variant_name.required' => 'Nama varian harus diisi',
+                'variants.*.variant_name.max' => 'Nama varian maksimal 255 karakter',
+                'variants.*.options.required' => 'Opsi varian harus diisi',
+                'variants.*.options.min' => 'Minimal 1 opsi varian harus ditambahkan',
+                'variants.*.options.*.option_name.required' => 'Nama opsi varian harus diisi',
+                'variants.*.options.*.option_name.max' => 'Nama opsi varian maksimal 255 karakter',
+                'variants.*.options.*.harga.numeric' => 'Harga varian harus berupa angka',
+                'variants.*.options.*.harga.min' => 'Harga varian tidak boleh negatif',
+                'variants.*.options.*.stock.integer' => 'Stok varian harus berupa angka bulat',
+                'variants.*.options.*.stock.min' => 'Stok varian tidak boleh negatif',
             ];
 
             $validator = Validator::make($request->all(), $rules, $messages);
@@ -443,7 +461,7 @@ class ProductController extends Controller
                 ], 422);
             }
 
-            $updateData = $request->except(['images', 'size_guide_image', '_method']);
+            $updateData = $request->except(['images', 'size_guide_image', '_method', 'variants', 'remove_size_guide']);
 
             // Handle empty values that should be set to null
             if (array_key_exists('harga_diskon', $updateData) && $updateData['harga_diskon'] === '') {
@@ -505,7 +523,41 @@ class ProductController extends Controller
             }
 
             $updated = $product->update($updateData);
-            $product->load(['category:id,judul_kategori', 'store:uuid,name']);
+
+            // Handle variants update if provided
+            if ($request->has('variants')) {
+                // Delete existing variants and their options
+                foreach ($product->variants as $variant) {
+                    // Delete all options for this variant
+                    $variant->options()->delete();
+                    // Delete the variant itself
+                    $variant->delete();
+                }
+
+                // Create new variants
+                if (is_array($request->variants) && count($request->variants) > 0) {
+                    foreach ($request->variants as $variantData) {
+                        $variant = ProductVariant::create([
+                            'product_uuid' => $product->uuid,
+                            'variant_name' => $variantData['variant_name']
+                        ]);
+
+                        // Create variant options
+                        if (isset($variantData['options']) && is_array($variantData['options'])) {
+                            foreach ($variantData['options'] as $optionData) {
+                                ProductVariantOption::create([
+                                    'variant_uuid' => $variant->uuid,
+                                    'option_name' => $optionData['option_name'],
+                                    'harga' => $optionData['harga'] ?? null,
+                                    'stock' => $optionData['stock'] ?? 0,
+                                ]);
+                            }
+                        }
+                    }
+                }
+            }
+
+            $product->load(['category:id,judul_kategori', 'store:uuid,name', 'variants.options']);
 
             Log::info('Product update result', [
                 'updated' => $updated,
