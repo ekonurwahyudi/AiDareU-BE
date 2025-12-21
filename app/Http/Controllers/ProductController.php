@@ -51,7 +51,7 @@ class ProductController extends Controller
             ]);
 
             $query = Product::with(['category:id,judul_kategori', 'store:uuid,name', 'variants.options'])
-                ->select('id', 'uuid', 'nama_produk', 'deskripsi', 'harga_produk', 'harga_diskon', 'status_produk', 'jenis_produk', 'stock', 'category_id', 'uuid_store', 'upload_gambar_produk', 'size_guide_image', 'created_at', 'url_produk');
+                ->select('id', 'uuid', 'nama_produk', 'deskripsi', 'harga_produk', 'harga_diskon', 'status_produk', 'jenis_produk', 'stock', 'category_id', 'uuid_store', 'upload_gambar_produk', 'size_guide_image', 'berat_produk', 'created_at', 'url_produk');
 
             // Filter by store UUID
             if ($request->has('store_uuid')) {
