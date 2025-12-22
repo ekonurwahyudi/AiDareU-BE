@@ -24,6 +24,7 @@ class AIProductPhotoController extends Controller
                 'image' => 'required|image|max:10240', // max 10MB
                 'lighting' => 'required|string|in:light,dark',
                 'ambiance' => 'required|string|in:clean,crowd',
+                'location' => 'nullable|string|in:indoor,outdoor', // only when ambiance is 'crowd'
                 'aspect_ratio' => 'required|string|in:1:1,3:4,16:9,9:16',
                 'additional_instructions' => 'nullable|string|max:500'
             ]);
@@ -33,6 +34,7 @@ class AIProductPhotoController extends Controller
             // Get parameters
             $lighting = $request->input('lighting');
             $ambiance = $request->input('ambiance');
+            $location = $request->input('location', 'indoor'); // default to indoor
             $aspectRatio = $request->input('aspect_ratio');
             $additionalInstructions = $request->input('additional_instructions', '');
 
@@ -71,7 +73,7 @@ class AIProductPhotoController extends Controller
                         'content' => [
                             [
                                 'type' => 'text',
-                                'text' => 'Analyze this product image and describe it in detail for product photography. Focus on: product type, colors, shape, brand/text visible, packaging details, and key visual elements. Be very specific and detailed. Keep it under 100 words.'
+                                'text' => 'Describe this product in extreme detail for AI image generation. Include: EXACT product type, EXACT colors (hex if possible), EXACT shape and dimensions, EXACT brand name and text visible, EXACT logo details, material (plastic/glass/metal), cap/lid design. Be extremely specific so AI can recreate it identically. Max 150 words.'
                             ],
                             [
                                 'type' => 'image_url',
@@ -82,7 +84,7 @@ class AIProductPhotoController extends Controller
                         ]
                     ]
                 ],
-                'max_tokens' => 300
+                'max_tokens' => 400
             ]);
 
             $productDescription = '';
@@ -99,7 +101,7 @@ class AIProductPhotoController extends Controller
             }
 
             // Step 2: Build enhanced prompt using product description from Vision AI
-            $enhancedPrompt = $this->buildProductPhotoPrompt($productDescription, $lighting, $ambiance, $additionalInstructions);
+            $enhancedPrompt = $this->buildProductPhotoPrompt($productDescription, $lighting, $ambiance, $location, $additionalInstructions);
             Log::info('Generated base prompt:', ['prompt' => $enhancedPrompt]);
 
             // Step 3: Generate 4 product photo variations using the analyzed description
@@ -206,7 +208,7 @@ class AIProductPhotoController extends Controller
     /**
      * Build enhanced prompt for product photo generation
      */
-    private function buildProductPhotoPrompt(string $productDescription, string $lighting, string $ambiance, string $additionalInstructions): string
+    private function buildProductPhotoPrompt(string $productDescription, string $lighting, string $ambiance, string $location, string $additionalInstructions): string
     {
         $lightingDescriptions = [
             'light' => 'bright natural daylight, soft shadows, airy and fresh atmosphere',
@@ -218,20 +220,34 @@ class AIProductPhotoController extends Controller
             'crowd' => 'lifestyle setting with natural props and contextual elements, real-world environment'
         ];
 
+        $locationDescriptions = [
+            'indoor' => 'indoor setting, cozy interior space',
+            'outdoor' => 'outdoor natural environment, open air setting'
+        ];
+
         $lightingDesc = $lightingDescriptions[$lighting] ?? 'bright natural daylight';
         $ambianceDesc = $ambianceDescriptions[$ambiance] ?? 'minimalist clean studio background';
 
         // Use product description from Vision AI as the base
-        $basePrompt = "Professional product photography of: {$productDescription}. ";
-        $basePrompt .= "Style: {$lightingDesc}, {$ambianceDesc}. ";
-        $basePrompt .= "The product must be the central focus, positioned prominently and clearly visible. ";
-        $basePrompt .= "High-end commercial advertising quality, sharp product details, beautiful composition. ";
+        $basePrompt = "Professional product photography. ";
+        $basePrompt .= "Product details (MUST BE EXACT): {$productDescription}. ";
+        $basePrompt .= "Photography style: {$lightingDesc}, {$ambianceDesc}";
 
-        if (!empty($additionalInstructions)) {
-            $basePrompt .= "Additional styling: {$additionalInstructions}. ";
+        // Add location description only if ambiance is 'crowd'
+        if ($ambiance === 'crowd') {
+            $locationDesc = $locationDescriptions[$location] ?? 'indoor setting';
+            $basePrompt .= ", {$locationDesc}";
         }
 
-        $basePrompt .= "Photo-realistic, professional studio quality, 4K resolution.";
+        $basePrompt .= ". IMPORTANT: Recreate the EXACT product with EXACT colors, EXACT text, EXACT logo. ";
+        $basePrompt .= "Only change the background/setting. Product must be identical to description. ";
+        $basePrompt .= "High-end commercial photography, sharp focus on product, professional composition. ";
+
+        if (!empty($additionalInstructions)) {
+            $basePrompt .= "Scene styling: {$additionalInstructions}. ";
+        }
+
+        $basePrompt .= "Photo-realistic, 8K quality, product must match description perfectly.";
 
         return $basePrompt;
     }
