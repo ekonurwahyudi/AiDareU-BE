@@ -17,17 +17,19 @@ class AIController extends Controller
     public function generateLogo(Request $request): JsonResponse
     {
         $request->validate([
+            'business_name' => 'required|string|max:200',
             'prompt' => 'required|string|max:1000',
             'style' => 'required|string|in:modern,simple,creative,minimalist,professional,playful,elegant,bold',
             'image' => 'nullable|image|max:5120' // max 5MB
         ]);
 
         try {
+            $businessName = $request->input('business_name');
             $prompt = $request->input('prompt');
             $style = $request->input('style');
 
-            // Build enhanced prompt with style
-            $enhancedPrompt = $this->buildLogoPrompt($prompt, $style);
+            // Build enhanced prompt with business name and style
+            $enhancedPrompt = $this->buildLogoPrompt($businessName, $prompt, $style);
 
             // If image is provided, we'll use it as reference in the prompt
             $imageDescription = '';
@@ -41,69 +43,90 @@ class AIController extends Controller
 
             // Get OpenAI API key
             $apiKey = env('OPENAI_API_KEY');
-            if (!$apiKey) {
-                throw new \Exception('OpenAI API key not configured');
+            if (!$apiKey || empty(trim($apiKey))) {
+                Log::error('OpenAI API key not configured');
+                throw new \Exception('OpenAI API key belum dikonfigurasi. Silakan hubungi administrator.');
             }
 
             // Generate 4 logo variations
             $logoResults = [];
+            $errors = [];
 
             for ($i = 0; $i < 4; $i++) {
-                // Add variation to prompt
-                $variationPrompt = $fullPrompt . " Variation $i.";
+                try {
+                    // Add variation to prompt
+                    $variationPrompt = $fullPrompt . " Variation " . ($i + 1) . ".";
 
-                // Call OpenAI DALL-E API
-                $response = Http::withHeaders([
-                    'Authorization' => 'Bearer ' . $apiKey,
-                    'Content-Type' => 'application/json',
-                ])->timeout(60)->post('https://api.openai.com/v1/images/generations', [
-                    'model' => 'dall-e-3',
-                    'prompt' => $variationPrompt,
-                    'n' => 1,
-                    'size' => '1024x1024',
-                    'quality' => 'standard',
-                    'response_format' => 'url'
-                ]);
+                    Log::info("Generating logo variation " . ($i + 1), ['prompt' => $variationPrompt]);
 
-                if ($response->successful()) {
-                    $result = $response->json();
-                    $imageUrl = $result['data'][0]['url'] ?? null;
-
-                    if ($imageUrl) {
-                        // Download and save the image
-                        $imageContent = file_get_contents($imageUrl);
-                        $filename = 'logo-' . Str::uuid() . '.png';
-                        $path = 'ai-logos/' . $filename;
-
-                        Storage::disk('public')->put($path, $imageContent);
-
-                        $logoResults[] = [
-                            'id' => Str::uuid(),
-                            'imageUrl' => Storage::disk('public')->url($path),
-                            'prompt' => $variationPrompt
-                        ];
-                    }
-                } else {
-                    Log::error('OpenAI API error:', [
-                        'status' => $response->status(),
-                        'body' => $response->body()
+                    // Call OpenAI DALL-E API
+                    $response = Http::withHeaders([
+                        'Authorization' => 'Bearer ' . $apiKey,
+                        'Content-Type' => 'application/json',
+                    ])->timeout(60)->post('https://api.openai.com/v1/images/generations', [
+                        'model' => 'dall-e-3',
+                        'prompt' => $variationPrompt,
+                        'n' => 1,
+                        'size' => '1024x1024',
+                        'quality' => 'standard',
+                        'response_format' => 'url'
                     ]);
-                }
 
-                // Add small delay between requests
-                if ($i < 3) {
-                    sleep(1);
+                    if ($response->successful()) {
+                        $result = $response->json();
+                        $imageUrl = $result['data'][0]['url'] ?? null;
+
+                        Log::info("OpenAI response successful", ['has_url' => !is_null($imageUrl)]);
+
+                        if ($imageUrl) {
+                            // Download and save the image
+                            $imageContent = file_get_contents($imageUrl);
+                            $filename = 'logo-' . Str::uuid() . '.png';
+                            $path = 'ai-logos/' . $filename;
+
+                            Storage::disk('public')->put($path, $imageContent);
+
+                            // Get full URL for the saved image
+                            $savedImageUrl = url('storage/' . $path);
+
+                            Log::info("Image saved successfully", ['path' => $savedImageUrl]);
+
+                            $logoResults[] = [
+                                'id' => Str::uuid(),
+                                'imageUrl' => $savedImageUrl,
+                                'prompt' => $variationPrompt
+                            ];
+                        }
+                    } else {
+                        $errorMsg = 'OpenAI API error on variation ' . ($i + 1);
+                        Log::error($errorMsg, [
+                            'status' => $response->status(),
+                            'body' => $response->body()
+                        ]);
+                        $errors[] = $errorMsg . ': ' . $response->body();
+                    }
+
+                    // Add small delay between requests
+                    if ($i < 3) {
+                        sleep(1);
+                    }
+                } catch (\Exception $e) {
+                    $errorMsg = 'Error generating variation ' . ($i + 1);
+                    Log::error($errorMsg, ['error' => $e->getMessage()]);
+                    $errors[] = $errorMsg . ': ' . $e->getMessage();
                 }
             }
 
             if (empty($logoResults)) {
-                throw new \Exception('Failed to generate any logos. Please try again.');
+                $errorDetails = !empty($errors) ? ' Errors: ' . implode('; ', $errors) : '';
+                throw new \Exception('Failed to generate any logos. Please try again.' . $errorDetails);
             }
 
             return response()->json([
                 'success' => true,
                 'message' => 'Logos generated successfully',
-                'data' => $logoResults
+                'data' => $logoResults,
+                'errors' => $errors // Include any partial errors
             ]);
 
         } catch (\Exception $e) {
@@ -122,7 +145,7 @@ class AIController extends Controller
     /**
      * Build enhanced prompt for logo generation
      */
-    private function buildLogoPrompt(string $userPrompt, string $style): string
+    private function buildLogoPrompt(string $businessName, string $userPrompt, string $style): string
     {
         $styleDescriptions = [
             'modern' => 'modern and sleek with clean lines, contemporary',
@@ -137,7 +160,7 @@ class AIController extends Controller
 
         $styleDesc = $styleDescriptions[$style] ?? 'modern';
 
-        return "Create a {$styleDesc} logo design. {$userPrompt}. The logo should be: professional, suitable for brand identity, vector-style, clean background, high quality, iconic, memorable, scalable design.";
+        return "Create a {$styleDesc} logo design for '{$businessName}'. {$userPrompt}. The logo should be: professional, suitable for brand identity, vector-style, clean background, high quality, iconic, memorable, scalable design.";
     }
 
     /**
