@@ -45,11 +45,6 @@ class AIProductPhotoController extends Controller
             ];
             $size = $sizeMap[$aspectRatio] ?? '1024x1024';
 
-            // Build enhanced prompt
-            $enhancedPrompt = $this->buildProductPhotoPrompt($lighting, $ambiance, $additionalInstructions);
-
-            Log::info('Generating product photo with prompt:', ['prompt' => $enhancedPrompt]);
-
             // Get OpenAI API key
             $apiKey = env('OPENAI_API_KEY');
             if (!$apiKey || empty(trim($apiKey))) {
@@ -57,11 +52,57 @@ class AIProductPhotoController extends Controller
                 throw new \Exception('OpenAI API key belum dikonfigurasi. Silakan hubungi administrator.');
             }
 
-            // Note: DALL-E 3 doesn't support image editing directly
-            // We'll use the image as context by describing it in the prompt
-            // For actual image editing, we would need to use DALL-E 2 or other services
+            // Step 1: Analyze uploaded image with GPT-4 Vision to extract product details
+            Log::info('Analyzing uploaded image with GPT-4 Vision');
 
-            // Generate 4 product photo variations
+            // Convert uploaded image to base64
+            $imageData = base64_encode(file_get_contents($request->file('image')->getRealPath()));
+            $imageBase64 = 'data:image/' . $request->file('image')->getClientOriginalExtension() . ';base64,' . $imageData;
+
+            // Use GPT-4 Vision to analyze the product
+            $visionResponse = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $apiKey,
+                'Content-Type' => 'application/json',
+            ])->timeout(60)->post('https://api.openai.com/v1/chat/completions', [
+                'model' => 'gpt-4o',
+                'messages' => [
+                    [
+                        'role' => 'user',
+                        'content' => [
+                            [
+                                'type' => 'text',
+                                'text' => 'Analyze this product image and describe it in detail for product photography. Focus on: product type, colors, shape, brand/text visible, packaging details, and key visual elements. Be very specific and detailed. Keep it under 100 words.'
+                            ],
+                            [
+                                'type' => 'image_url',
+                                'image_url' => [
+                                    'url' => $imageBase64
+                                ]
+                            ]
+                        ]
+                    ]
+                ],
+                'max_tokens' => 300
+            ]);
+
+            $productDescription = '';
+            if ($visionResponse->successful()) {
+                $visionResult = $visionResponse->json();
+                $productDescription = $visionResult['choices'][0]['message']['content'] ?? '';
+                Log::info('GPT-4 Vision analysis:', ['description' => $productDescription]);
+            } else {
+                Log::warning('GPT-4 Vision failed, using generic description', [
+                    'status' => $visionResponse->status(),
+                    'body' => $visionResponse->body()
+                ]);
+                $productDescription = 'A product bottle';
+            }
+
+            // Step 2: Build enhanced prompt using product description from Vision AI
+            $enhancedPrompt = $this->buildProductPhotoPrompt($productDescription, $lighting, $ambiance, $additionalInstructions);
+            Log::info('Generated base prompt:', ['prompt' => $enhancedPrompt]);
+
+            // Step 3: Generate 4 product photo variations using the analyzed description
             $photoResults = [];
             $errors = [];
 
@@ -165,30 +206,32 @@ class AIProductPhotoController extends Controller
     /**
      * Build enhanced prompt for product photo generation
      */
-    private function buildProductPhotoPrompt(string $lighting, string $ambiance, string $additionalInstructions): string
+    private function buildProductPhotoPrompt(string $productDescription, string $lighting, string $ambiance, string $additionalInstructions): string
     {
         $lightingDescriptions = [
-            'light' => 'bright, well-lit, natural daylight, soft shadows',
-            'dark' => 'dramatic dark lighting, moody atmosphere, low-key lighting'
+            'light' => 'bright natural daylight, soft shadows, airy and fresh atmosphere',
+            'dark' => 'dramatic moody lighting, dark elegant background, sophisticated ambiance'
         ];
 
         $ambianceDescriptions = [
-            'clean' => 'clean minimal background, studio setting, simple elegant backdrop',
-            'crowd' => 'lifestyle setting, contextual environment, realistic scene with props'
+            'clean' => 'minimalist clean studio background, simple elegant backdrop, focus on product only',
+            'crowd' => 'lifestyle setting with natural props and contextual elements, real-world environment'
         ];
 
-        $lightingDesc = $lightingDescriptions[$lighting] ?? 'bright, well-lit';
-        $ambianceDesc = $ambianceDescriptions[$ambiance] ?? 'clean minimal background';
+        $lightingDesc = $lightingDescriptions[$lighting] ?? 'bright natural daylight';
+        $ambianceDesc = $ambianceDescriptions[$ambiance] ?? 'minimalist clean studio background';
 
-        $basePrompt = "Professional product photography. {$lightingDesc}. {$ambianceDesc}. ";
-        $basePrompt .= "High quality commercial photo, sharp focus on product, professional composition, ";
-        $basePrompt .= "attractive presentation suitable for e-commerce or marketing. ";
+        // Use product description from Vision AI as the base
+        $basePrompt = "Professional product photography of: {$productDescription}. ";
+        $basePrompt .= "Style: {$lightingDesc}, {$ambianceDesc}. ";
+        $basePrompt .= "The product must be the central focus, positioned prominently and clearly visible. ";
+        $basePrompt .= "High-end commercial advertising quality, sharp product details, beautiful composition. ";
 
         if (!empty($additionalInstructions)) {
-            $basePrompt .= $additionalInstructions . " ";
+            $basePrompt .= "Additional styling: {$additionalInstructions}. ";
         }
 
-        $basePrompt .= "Photo-realistic, high resolution, professional studio quality.";
+        $basePrompt .= "Photo-realistic, professional studio quality, 4K resolution.";
 
         return $basePrompt;
     }
