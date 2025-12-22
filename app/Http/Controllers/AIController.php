@@ -341,7 +341,18 @@ class AIController extends Controller
 
         $styleDesc = $styleDescriptions[$style] ?? 'modern';
 
-        return "A {$styleDesc} logo design for '{$businessName}'. {$userPrompt}. IMPORTANT: Create ONLY the logo itself on a plain white background, NO mockups, NO business cards, NO packaging, NO product presentations. Just the clean logo mark that can be used anywhere. Vector-style, flat design, professional, simple, iconic, memorable. Centered on white background.";
+        return "Create a {$styleDesc} logo icon for '{$businessName}'. {$userPrompt}.
+
+CRITICAL REQUIREMENTS:
+- ONLY draw the logo symbol/icon itself
+- NO mockups of ANY kind (no pens, notebooks, business cards, mugs, packaging, products, or any physical objects)
+- NO context, NO backgrounds except plain white
+- Just the pure logo graphic that can be used on anything
+- Think like famous logos: Gojek, Nike swoosh, Apple logo - just the icon itself
+- Flat design, vector-style, simple, clean, iconic
+- Centered on solid white background (#FFFFFF)
+
+This should be JUST the logo mark, nothing else.";
     }
 
     /**
