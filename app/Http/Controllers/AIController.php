@@ -341,51 +341,44 @@ class AIController extends Controller
 
         $styleDesc = $styleDescriptions[$style] ?? 'modern';
 
-        return "Create a {$styleDesc} logo design for '{$businessName}'. {$userPrompt}.
+        return "Create a {$styleDesc} logo for '{$businessName}'. {$userPrompt}.
 
-CRITICAL INSTRUCTIONS - READ CAREFULLY:
+WHAT TO CREATE:
+A simple flat 2D logo with icon + text. Just the logo mark itself on white background.
 
-1. LOGO COMPOSITION (MUST INCLUDE BOTH):
-   ✓ Icon/symbol/graphic element
-   ✓ Text showing '{$businessName}' with professional typography
-   ✓ Both elements combined in ONE cohesive logo design
+MUST INCLUDE:
+• Icon/symbol element
+• '{$businessName}' text with good typography
+• Both combined in one clean design
 
-2. THIS IS A LOGO FILE - NOT A PRESENTATION:
-   ✓ Create ONLY the flat 2D logo graphic itself
-   ✓ Like a logo you would see in a style guide or brand book
-   ✓ Ready to be placed on any background or product
+WRONG (DO NOT CREATE THESE):
+❌ Logo shown on a phone screen
+❌ Logo on business cards or stationery
+❌ Logo on coffee cups or products
+❌ Logo with hands holding something
+❌ Logo in mockup presentations
+❌ Logo on bags, packaging, or boxes
+❌ Any 3D scene or environment
+❌ Any physical objects in the image
 
-3. ABSOLUTELY FORBIDDEN - DO NOT INCLUDE:
-   ✗ NO smartphones, NO tablets, NO screens of any kind
-   ✗ NO hands, NO fingers, NO people, NO body parts
-   ✗ NO coffee cups, NO mugs, NO products, NO packaging
-   ✗ NO business cards, NO paper, NO notebooks, NO stationery
-   ✗ NO bags, NO boxes, NO containers
-   ✗ NO mockups, NO presentations, NO applications
-   ✗ NO 3D objects, NO physical items whatsoever
-   ✗ NO shadows that suggest the logo is ON something
-   ✗ The logo must NOT appear to be placed ON or IN anything
+RIGHT (CREATE LIKE THESE):
+✓ Just the Nike swoosh + NIKE text - nothing else
+✓ Just the McDonald's arches + text - flat graphic only
+✓ Just the Adidas trefoil + ADIDAS text - no context
+✓ Just the Apple apple icon - the logo itself only
 
-4. CORRECT EXAMPLES TO FOLLOW:
-   - McDonald's golden arches + text (flat, 2D, nothing else)
-   - Nike swoosh + text (just the logo mark)
-   - Adidas trefoil + text (symbol and typography only)
-   - Starbucks siren circle + text (logo only, no cup)
+TECHNICAL SPECS:
+• {$styleDesc} style
+• Flat 2D vector design
+• Icon and text combined
+• White background (#FFFFFF)
+• Centered, clean, professional
+• NO shadows, NO depth, NO context
+• The actual logo file - not a presentation of it
 
-5. TECHNICAL REQUIREMENTS:
-   - Flat, vector-style, 2D design
-   - {$styleDesc} aesthetic
-   - Solid white background (#FFFFFF)
-   - Centered on canvas
-   - Clean, professional, iconic
-   - Logo graphic ONLY - nothing else in the image
+IMPORTANT: This is the LOGO FILE itself that will be used everywhere. Do NOT show it being used - just create the logo mark (icon + text) on white background. Nothing else in the image.
 
-FINAL CHECK BEFORE GENERATING:
-- Is this JUST a logo (icon + text)?
-- Is there NO phone/hand/product/mockup?
-- Would this work in a brand guidelines PDF?
-
-If you answered YES to all three, proceed. OUTPUT: Logo graphic only.";
+OUTPUT: Flat logo graphic only (icon + '{$businessName}' text on white).";
     }
 
     /**
@@ -407,11 +400,22 @@ If you answered YES to all three, proceed. OUTPUT: Logo graphic only.";
             // Get file contents
             $file = Storage::disk('public')->get($path);
 
-            // Return file as download
-            // CORS headers are handled by Laravel CORS middleware
-            return response($file, 200)
+            // Get origin from request
+            $origin = request()->header('Origin');
+
+            // Return file as download with explicit CORS headers
+            $response = response($file, 200)
                 ->header('Content-Type', 'image/png')
                 ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+
+            // Add CORS headers if origin is present
+            if ($origin) {
+                $response->header('Access-Control-Allow-Origin', $origin)
+                         ->header('Access-Control-Allow-Credentials', 'true')
+                         ->header('Access-Control-Expose-Headers', 'Content-Disposition, Content-Type');
+            }
+
+            return $response;
 
         } catch (\Exception $e) {
             Log::error('Logo download error:', [
