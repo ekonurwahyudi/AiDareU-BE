@@ -104,8 +104,8 @@ class AIController extends Controller
                                     Storage::disk('public')->put($path, $imageContent);
                                 }
 
-                                // Get full URL for the saved image
-                                $savedImageUrl = url('storage/' . $path);
+                                // Get full URL for the saved image (force HTTPS for production)
+                                $savedImageUrl = str_replace('http://', 'https://', url('storage/' . $path));
 
                                 Log::info("Image saved successfully", ['path' => $savedImageUrl]);
 
@@ -329,49 +329,51 @@ class AIController extends Controller
     private function buildLogoPrompt(string $businessName, string $userPrompt, string $style): string
     {
         $styleDescriptions = [
-            'modern' => 'modern and sleek with clean lines, contemporary',
-            'simple' => 'simple and minimalistic, easy to recognize',
-            'creative' => 'creative and unique with artistic elements',
-            'minimalist' => 'minimalist design with essential elements only',
-            'professional' => 'professional and corporate, business-appropriate',
-            'playful' => 'playful and fun with vibrant elements',
-            'elegant' => 'elegant and sophisticated, luxury feel',
-            'bold' => 'bold and strong with impactful design'
+            'modern'      => 'modern, sleek, and contemporary with clean lines',
+            'simple'      => 'simple and minimalistic, easy to recognize',
+            'creative'    => 'creative and unique with artistic elements',
+            'minimalist'  => 'minimalist design with only essential elements',
+            'professional'=> 'professional and corporate, business-appropriate',
+            'playful'     => 'playful and fun with vibrant elements',
+            'elegant'     => 'elegant and sophisticated with a luxury feel',
+            'bold'        => 'bold, strong, and impactful',
         ];
 
-        $styleDesc = $styleDescriptions[$style] ?? 'modern';
+        $styleDesc = $styleDescriptions[$style] ?? 'modern, sleek, and contemporary with clean lines';
 
-        return "Create a {$styleDesc} logo design for the business named '{$businessName}'. {$userPrompt}
+        return "
+Design a {$styleDesc} flat 2D logo for a business named '{$businessName}'.
+Business description / concept: {$userPrompt}
+
+LAYOUT:
+- Create a combination mark logo.
+- Use ONLY ONE of these layouts:
+  1) Icon on the left, '{$businessName}' text on the right (horizontal), OR
+  2) Icon on the top, '{$businessName}' text at the bottom (stacked).
+- Icon and text must be clearly separated and easy to read.
 
 CRITICAL REQUIREMENTS:
-1. Create ONLY a flat 2D logo graphic on pure white background
-2. The logo must contain TWO elements ONLY:
-   - A unique icon/symbol that represents the business
-   - The text '{$businessName}' in clear, readable typography
-3. Layout options: Either icon-left + text-right, OR icon-top + text-bottom
-4. Style: {$styleDesc}, clean, and professional
+1. Flat 2D vector-style logo on a pure white background (#FFFFFF).
+2. ONLY TWO visual elements:
+   - ONE unique custom icon / symbol representing the business.
+   - The text '{$businessName}' in clear, readable typography.
+3. No gradients, no textures, no realistic lighting; use clean solid shapes.
+4. Composition must be clean, centered, and scalable for app icon, website, and print.
 
-STRICT PROHIBITIONS - DO NOT CREATE:
-❌ NO existing brand logos (McDonald's, Apple, Starbucks, etc.)
-❌ NO mockups (business cards, coffee cups, packaging, phones, laptops)
-❌ NO physical objects or products in the scene
-❌ NO hands, people, or any context
-❌ NO 3D scenes, environments, or backgrounds other than white
-❌ NO presentation layouts or marketing materials
-❌ NO shadows, depth effects, or realistic textures
-❌ NO additional text, symbols, or decorative elements beyond the logo itself
+STRICTLY DO NOT:
+- Do NOT include existing brand logos or references (Tokopedia, Shopee, McDonald's, Apple, Starbucks, etc.).
+- Do NOT create mockups (no business cards, packaging, phones, laptops, storefronts, etc.).
+- Do NOT show physical products, people, hands, or any scene/context.
+- Do NOT create 3D, isometric, or perspective views.
+- Do NOT use shadows, depth effects, reflections, or realistic materials.
+- Do NOT add any extra text, tagline, or decorative elements besides the icon and '{$businessName}'.
 
-CORRECT FORMAT:
-Create a simple, flat vector-style logo with:
-- ONE custom icon/symbol
-- The business name '{$businessName}' as text
-- Pure white background (#FFFFFF)
-- Centered composition
-- Clean and scalable design
-
-This must be the actual logo file itself - just the graphic mark that will be used on websites, business cards, and marketing materials. Nothing else in the image.
-
-OUTPUT: A single flat logo consisting of icon + '{$businessName}' text on white background. Nothing more.";
+OUTPUT:
+A single, clean, flat logo file consisting ONLY of:
+- One custom icon/symbol, and
+- The '{$businessName}' text,
+on a pure white background, ready to be used directly as a brand logo.
+";
     }
 
     /**
