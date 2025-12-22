@@ -436,24 +436,5 @@ Route::middleware(['auth:sanctum,web'])->group(function () {
         Route::post('/generate-logo', [AIController::class, 'generateLogo']);
         Route::post('/refine-logo', [AIController::class, 'refineLogo']);
         Route::get('/download-logo/{filename}', [AIController::class, 'downloadLogo']);
-
-        // OPTIONS preflight for download endpoint
-        Route::options('/download-logo/{filename}', function() {
-            $origin = request()->header('Origin', '*');
-            $allowedOrigins = [
-                'https://app.aidareu.com',
-                'https://aidareu.com',
-                'http://localhost:3000',
-                'http://127.0.0.1:3000'
-            ];
-            $allowOrigin = in_array($origin, $allowedOrigins) ? $origin : '*';
-
-            return response('', 200)
-                ->header('Access-Control-Allow-Origin', $allowOrigin)
-                ->header('Access-Control-Allow-Methods', 'GET, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept')
-                ->header('Access-Control-Allow-Credentials', 'true')
-                ->header('Access-Control-Max-Age', '3600');
-        });
     });
 });
