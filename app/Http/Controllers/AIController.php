@@ -60,6 +60,7 @@ class AIController extends Controller
                     Log::info("Generating logo variation " . ($i + 1), ['prompt' => $variationPrompt]);
 
                     // Call OpenAI DALL-E API
+                    // Note: DALL-E 3 only supports square images, we'll process them after
                     $response = Http::withHeaders([
                         'Authorization' => 'Bearer ' . $apiKey,
                         'Content-Type' => 'application/json',
@@ -79,17 +80,22 @@ class AIController extends Controller
                         Log::info("OpenAI response successful", ['has_url' => !is_null($imageUrl)]);
 
                         if ($imageUrl) {
-                            // Download and save the image
+                            // Download the image
                             $imageContent = file_get_contents($imageUrl);
+
+                            // Process image: remove white background and make transparent
+                            $processedImage = $this->removeWhiteBackground($imageContent);
+
                             $filename = 'logo-' . Str::uuid() . '.png';
                             $path = 'ai-logos/' . $filename;
 
-                            Storage::disk('public')->put($path, $imageContent);
+                            // Save processed image with transparency
+                            Storage::disk('public')->put($path, $processedImage);
 
                             // Get full URL for the saved image
                             $savedImageUrl = url('storage/' . $path);
 
-                            Log::info("Image saved successfully", ['path' => $savedImageUrl]);
+                            Log::info("Image saved successfully with transparent background", ['path' => $savedImageUrl]);
 
                             $logoResults[] = [
                                 'id' => Str::uuid(),
@@ -140,6 +146,143 @@ class AIController extends Controller
                 'message' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Remove white background and make it transparent
+     */
+    private function removeWhiteBackground(string $imageContent): string
+    {
+        // Create image from string
+        $image = imagecreatefromstring($imageContent);
+        if (!$image) {
+            return $imageContent; // Return original if processing fails
+        }
+
+        // Get image dimensions
+        $width = imagesx($image);
+        $height = imagesy($image);
+
+        // Create new image with alpha channel
+        $transparent = imagecreatetruecolor($width, $height);
+
+        // Enable alpha blending and save alpha channel
+        imagealphablending($transparent, false);
+        imagesavealpha($transparent, true);
+
+        // Fill with transparent color
+        $transparentColor = imagecolorallocatealpha($transparent, 0, 0, 0, 127);
+        imagefill($transparent, 0, 0, $transparentColor);
+
+        // Define white color range for removal (adjust tolerance as needed)
+        $tolerance = 30; // Adjust this value (0-127) for more/less aggressive removal
+
+        // Process each pixel
+        for ($x = 0; $x < $width; $x++) {
+            for ($y = 0; $y < $height; $y++) {
+                $rgb = imagecolorat($image, $x, $y);
+                $colors = imagecolorsforindex($image, $rgb);
+
+                // Check if pixel is white (or close to white)
+                if ($colors['red'] >= (255 - $tolerance) &&
+                    $colors['green'] >= (255 - $tolerance) &&
+                    $colors['blue'] >= (255 - $tolerance)) {
+                    // Make it transparent
+                    $newColor = imagecolorallocatealpha($transparent,
+                        $colors['red'],
+                        $colors['green'],
+                        $colors['blue'],
+                        127
+                    );
+                } else {
+                    // Keep original color
+                    $newColor = imagecolorallocatealpha($transparent,
+                        $colors['red'],
+                        $colors['green'],
+                        $colors['blue'],
+                        $colors['alpha']
+                    );
+                }
+                imagesetpixel($transparent, $x, $y, $newColor);
+            }
+        }
+
+        // Auto-crop to remove excess transparent space and optimize size
+        $transparent = $this->autoCropImage($transparent);
+
+        // Save to buffer
+        ob_start();
+        imagepng($transparent, null, 9); // 9 = maximum compression
+        $processedContent = ob_get_contents();
+        ob_end_clean();
+
+        // Clean up
+        imagedestroy($image);
+        imagedestroy($transparent);
+
+        return $processedContent;
+    }
+
+    /**
+     * Auto-crop image to remove excess transparent space
+     */
+    private function autoCropImage($image)
+    {
+        $width = imagesx($image);
+        $height = imagesy($image);
+
+        // Find boundaries
+        $top = $height;
+        $bottom = 0;
+        $left = $width;
+        $right = 0;
+
+        for ($x = 0; $x < $width; $x++) {
+            for ($y = 0; $y < $height; $y++) {
+                $rgb = imagecolorat($image, $x, $y);
+                $colors = imagecolorsforindex($image, $rgb);
+
+                // Check if pixel is not transparent
+                if ($colors['alpha'] < 127) {
+                    if ($x < $left) $left = $x;
+                    if ($x > $right) $right = $x;
+                    if ($y < $top) $top = $y;
+                    if ($y > $bottom) $bottom = $y;
+                }
+            }
+        }
+
+        // Add small padding (5% of dimensions)
+        $padding = 20;
+        $left = max(0, $left - $padding);
+        $top = max(0, $top - $padding);
+        $right = min($width - 1, $right + $padding);
+        $bottom = min($height - 1, $bottom + $padding);
+
+        // Calculate new dimensions
+        $newWidth = $right - $left + 1;
+        $newHeight = $bottom - $top + 1;
+
+        // Don't crop if no content found
+        if ($newWidth <= 0 || $newHeight <= 0) {
+            return $image;
+        }
+
+        // Create cropped image
+        $cropped = imagecreatetruecolor($newWidth, $newHeight);
+        imagealphablending($cropped, false);
+        imagesavealpha($cropped, true);
+
+        // Fill with transparent
+        $transparentColor = imagecolorallocatealpha($cropped, 0, 0, 0, 127);
+        imagefill($cropped, 0, 0, $transparentColor);
+
+        // Copy cropped portion
+        imagecopy($cropped, $image, 0, 0, $left, $top, $newWidth, $newHeight);
+
+        imagedestroy($image);
+
+        return $cropped;
     }
 
     /**
