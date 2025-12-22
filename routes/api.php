@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\ProductDigitalController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\AIController;
 
 // Health check endpoint for monitoring
 Route::get('/health', function () {
@@ -428,4 +429,10 @@ Route::middleware(['auth:sanctum,web'])->group(function () {
     Route::put('/theme-settings/testimonial/{uuid}', [SettingTokoController::class, 'updateTestimonial']);
     Route::delete('/theme-settings/testimonial/{uuid}', [SettingTokoController::class, 'deleteTestimonial']);
     Route::post('/theme-settings/seo', [SettingTokoController::class, 'updateSeo']);
+
+    // AI Branding Routes
+    Route::prefix('ai')->group(function () {
+        Route::post('/generate-logo', [AIController::class, 'generateLogo']);
+        Route::post('/refine-logo', [AIController::class, 'refineLogo']);
+    });
 });
