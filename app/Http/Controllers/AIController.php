@@ -387,6 +387,20 @@ OUTPUT: Flat logo graphic only (icon + '{$businessName}' text on white).";
     public function downloadLogo(string $filename)
     {
         try {
+            // Get origin from request for CORS
+            $origin = request()->header('Origin', '*');
+
+            // List of allowed origins
+            $allowedOrigins = [
+                'https://app.aidareu.com',
+                'https://aidareu.com',
+                'http://localhost:3000',
+                'http://127.0.0.1:3000'
+            ];
+
+            // Check if origin is allowed
+            $allowOrigin = in_array($origin, $allowedOrigins) ? $origin : '*';
+
             $path = 'ai-logos/' . $filename;
 
             // Check if file exists
@@ -394,28 +408,24 @@ OUTPUT: Flat logo graphic only (icon + '{$businessName}' text on white).";
                 return response()->json([
                     'success' => false,
                     'message' => 'Logo file not found'
-                ], 404);
+                ], 404)
+                ->header('Access-Control-Allow-Origin', $allowOrigin)
+                ->header('Access-Control-Allow-Credentials', 'true');
             }
 
             // Get file contents
             $file = Storage::disk('public')->get($path);
 
-            // Get origin from request
-            $origin = request()->header('Origin');
-
-            // Return file as download with explicit CORS headers
-            $response = response($file, 200)
+            // Return file as download with CORS headers
+            return response($file, 200)
                 ->header('Content-Type', 'image/png')
-                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
-
-            // Add CORS headers if origin is present
-            if ($origin) {
-                $response->header('Access-Control-Allow-Origin', $origin)
-                         ->header('Access-Control-Allow-Credentials', 'true')
-                         ->header('Access-Control-Expose-Headers', 'Content-Disposition, Content-Type');
-            }
-
-            return $response;
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"')
+                ->header('Access-Control-Allow-Origin', $allowOrigin)
+                ->header('Access-Control-Allow-Credentials', 'true')
+                ->header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept')
+                ->header('Access-Control-Expose-Headers', 'Content-Disposition, Content-Type')
+                ->header('Vary', 'Origin');
 
         } catch (\Exception $e) {
             Log::error('Logo download error:', [
