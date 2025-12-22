@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
 use App\Mail\VerificationCodeMail;
 
 class AuthController extends Controller
@@ -202,7 +203,42 @@ class AuthController extends Controller
         $data = $request->validate([
             'email' => ['required','email'],
             'password' => ['required','string','min:5'],
+            'recaptcha_token' => ['required','string'],
         ]);
+
+        // Verify reCAPTCHA v3 token
+        $recaptchaSecret = env('RECAPTCHA_SECRET_KEY', '6LcoGjMsAAAAAPRAtTNyGrkitLZmPi6vIZNoJSyO');
+        $recaptchaResponse = Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
+            'secret' => $recaptchaSecret,
+            'response' => $data['recaptcha_token'],
+            'remoteip' => $request->ip(),
+        ]);
+
+        $recaptchaResult = $recaptchaResponse->json();
+
+        // Check if reCAPTCHA verification failed
+        if (!$recaptchaResult['success']) {
+            \Log::warning('reCAPTCHA verification failed', [
+                'email' => $data['email'],
+                'error' => $recaptchaResult['error-codes'] ?? 'Unknown error',
+            ]);
+            return response()->json([
+                'message' => 'reCAPTCHA verification failed. Please try again.'
+            ], 422);
+        }
+
+        // Check reCAPTCHA score (v3 returns a score between 0.0 and 1.0)
+        // Score interpretation: 1.0 is very likely a good interaction, 0.0 is very likely a bot
+        $recaptchaScore = $recaptchaResult['score'] ?? 0;
+        if ($recaptchaScore < 0.5) {
+            \Log::warning('reCAPTCHA score too low', [
+                'email' => $data['email'],
+                'score' => $recaptchaScore,
+            ]);
+            return response()->json([
+                'message' => 'Security check failed. Please try again later.'
+            ], 422);
+        }
 
         // Attempt login via session guard
         if (!Auth::attempt(['email' => $data['email'], 'password' => $data['password']])) {
