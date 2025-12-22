@@ -341,18 +341,21 @@ class AIController extends Controller
 
         $styleDesc = $styleDescriptions[$style] ?? 'modern';
 
-        return "Create a {$styleDesc} logo icon for '{$businessName}'. {$userPrompt}.
+        return "Design a {$styleDesc} logo icon for '{$businessName}'. {$userPrompt}.
 
-CRITICAL REQUIREMENTS:
-- ONLY draw the logo symbol/icon itself
-- NO mockups of ANY kind (no pens, notebooks, business cards, mugs, packaging, products, or any physical objects)
-- NO context, NO backgrounds except plain white
-- Just the pure logo graphic that can be used on anything
-- Think like famous logos: Gojek, Nike swoosh, Apple logo - just the icon itself
-- Flat design, vector-style, simple, clean, iconic
-- Centered on solid white background (#FFFFFF)
+STRICT RULES - VERY IMPORTANT:
+- Create ONLY the logo symbol/emblem itself - nothing else
+- NO phones, NO hands, NO mockups, NO products, NO packaging, NO physical objects of any kind
+- NO business cards, NO stationery, NO applications shown
+- DO NOT show the logo ON anything or IN any context
+- Just draw the logo mark itself on plain white background
+- Like these examples: Nike swoosh alone, Apple logo alone, Starbucks mermaid alone, Adidas trefoil alone, Target bullseye alone
+- This is the actual logo file - not a presentation or mockup
+- Vector-style, flat design, clean, professional, iconic
+- Perfect for use on websites, apps, products
+- Plain solid white background (#FFFFFF), centered
 
-This should be JUST the logo mark, nothing else.";
+OUTPUT: Just the logo graphic itself - the symbol/icon/emblem only.";
     }
 
     /**
