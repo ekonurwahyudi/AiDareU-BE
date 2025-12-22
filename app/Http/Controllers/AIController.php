@@ -341,44 +341,37 @@ class AIController extends Controller
 
         $styleDesc = $styleDescriptions[$style] ?? 'modern';
 
-        return "Create a {$styleDesc} logo for '{$businessName}'. {$userPrompt}.
+        return "Create a {$styleDesc} logo design for the business named '{$businessName}'. {$userPrompt}
 
-WHAT TO CREATE:
-A simple flat 2D logo with icon + text. Just the logo mark itself on white background.
+CRITICAL REQUIREMENTS:
+1. Create ONLY a flat 2D logo graphic on pure white background
+2. The logo must contain TWO elements ONLY:
+   - A unique icon/symbol that represents the business
+   - The text '{$businessName}' in clear, readable typography
+3. Layout options: Either icon-left + text-right, OR icon-top + text-bottom
+4. Style: {$styleDesc}, clean, and professional
 
-MUST INCLUDE:
-• Icon/symbol element
-• '{$businessName}' text with good typography
-• Both combined in one clean design
+STRICT PROHIBITIONS - DO NOT CREATE:
+❌ NO existing brand logos (McDonald's, Apple, Starbucks, etc.)
+❌ NO mockups (business cards, coffee cups, packaging, phones, laptops)
+❌ NO physical objects or products in the scene
+❌ NO hands, people, or any context
+❌ NO 3D scenes, environments, or backgrounds other than white
+❌ NO presentation layouts or marketing materials
+❌ NO shadows, depth effects, or realistic textures
+❌ NO additional text, symbols, or decorative elements beyond the logo itself
 
-WRONG (DO NOT CREATE THESE):
-❌ Logo shown on a phone screen
-❌ Logo on business cards or stationery
-❌ Logo on coffee cups or products
-❌ Logo with hands holding something
-❌ Logo in mockup presentations
-❌ Logo on bags, packaging, or boxes
-❌ Any 3D scene or environment
-❌ Any physical objects in the image
+CORRECT FORMAT:
+Create a simple, flat vector-style logo with:
+- ONE custom icon/symbol
+- The business name '{$businessName}' as text
+- Pure white background (#FFFFFF)
+- Centered composition
+- Clean and scalable design
 
-RIGHT (CREATE LIKE THESE):
-✓ Just the Nike swoosh + NIKE text - nothing else
-✓ Just the McDonald's arches + text - flat graphic only
-✓ Just the Adidas trefoil + ADIDAS text - no context
-✓ Just the Apple apple icon - the logo itself only
+This must be the actual logo file itself - just the graphic mark that will be used on websites, business cards, and marketing materials. Nothing else in the image.
 
-TECHNICAL SPECS:
-• {$styleDesc} style
-• Flat 2D vector design
-• Icon and text combined
-• White background (#FFFFFF)
-• Centered, clean, professional
-• NO shadows, NO depth, NO context
-• The actual logo file - not a presentation of it
-
-IMPORTANT: This is the LOGO FILE itself that will be used everywhere. Do NOT show it being used - just create the logo mark (icon + text) on white background. Nothing else in the image.
-
-OUTPUT: Flat logo graphic only (icon + '{$businessName}' text on white).";
+OUTPUT: A single flat logo consisting of icon + '{$businessName}' text on white background. Nothing more.";
     }
 
     /**
