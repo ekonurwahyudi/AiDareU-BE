@@ -160,7 +160,7 @@ class AIController extends Controller
 
         $styleDesc = $styleDescriptions[$style] ?? 'modern';
 
-        return "Create a {$styleDesc} logo design for '{$businessName}'. {$userPrompt}. The logo should be: professional, suitable for brand identity, vector-style, clean background, high quality, iconic, memorable, scalable design.";
+        return "A {$styleDesc} logo design for '{$businessName}'. {$userPrompt}. IMPORTANT: Create ONLY the logo itself on a plain white background, NO mockups, NO business cards, NO packaging, NO product presentations. Just the clean logo mark that can be used anywhere. Vector-style, flat design, professional, simple, iconic, memorable. Centered on white background.";
     }
 
     /**
