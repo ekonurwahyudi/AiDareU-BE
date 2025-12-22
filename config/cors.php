@@ -52,7 +52,7 @@ return [
 
     // Headers
     'allowed_headers' => ['*'],
-    'exposed_headers' => [],
+    'exposed_headers' => ['Content-Disposition', 'Content-Type'],
     'max_age' => 0,
 
     // Important for cookie-based auth (Sanctum): must be true when using credentials: 'include'

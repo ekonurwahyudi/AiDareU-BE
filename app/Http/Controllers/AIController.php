@@ -341,39 +341,51 @@ class AIController extends Controller
 
         $styleDesc = $styleDescriptions[$style] ?? 'modern';
 
-        return "Design a complete {$styleDesc} logo for '{$businessName}'. {$userPrompt}.
+        return "Create a {$styleDesc} logo design for '{$businessName}'. {$userPrompt}.
 
-STRICT REQUIREMENTS:
-1. LOGO MUST INCLUDE BOTH:
-   - A distinctive icon/symbol/emblem
-   - The business name '{$businessName}' as text (with proper typography)
+CRITICAL INSTRUCTIONS - READ CAREFULLY:
 
-2. LAYOUT OPTIONS (choose one that fits best):
-   - Icon with text beside it (horizontal)
-   - Icon with text below it (stacked)
-   - Icon integrated with text
-   - Text with small icon element
+1. LOGO COMPOSITION (MUST INCLUDE BOTH):
+   ✓ Icon/symbol/graphic element
+   ✓ Text showing '{$businessName}' with professional typography
+   ✓ Both elements combined in ONE cohesive logo design
 
-3. WHAT TO CREATE:
-   - Complete, ready-to-use logo combining icon + text
-   - Professional typography for the business name
-   - Cohesive design where icon and text work together
-   - Like: Adidas (trefoil + text), Starbucks (mermaid + text), Nike (swoosh + text)
+2. THIS IS A LOGO FILE - NOT A PRESENTATION:
+   ✓ Create ONLY the flat 2D logo graphic itself
+   ✓ Like a logo you would see in a style guide or brand book
+   ✓ Ready to be placed on any background or product
 
-4. STRICT PROHIBITIONS:
-   - NO phones, NO hands, NO mockups, NO products, NO packaging
-   - NO business cards, NO stationery, NO physical objects
-   - DO NOT show logo ON anything - just the logo itself
-   - NO presentations or context - only the actual logo file
+3. ABSOLUTELY FORBIDDEN - DO NOT INCLUDE:
+   ✗ NO smartphones, NO tablets, NO screens of any kind
+   ✗ NO hands, NO fingers, NO people, NO body parts
+   ✗ NO coffee cups, NO mugs, NO products, NO packaging
+   ✗ NO business cards, NO paper, NO notebooks, NO stationery
+   ✗ NO bags, NO boxes, NO containers
+   ✗ NO mockups, NO presentations, NO applications
+   ✗ NO 3D objects, NO physical items whatsoever
+   ✗ NO shadows that suggest the logo is ON something
+   ✗ The logo must NOT appear to be placed ON or IN anything
 
-5. STYLE:
-   - {$styleDesc}
-   - Vector-style, flat design, clean, professional
-   - Plain solid white background (#FFFFFF)
-   - Centered composition
-   - Ready for use on websites, apps, products
+4. CORRECT EXAMPLES TO FOLLOW:
+   - McDonald's golden arches + text (flat, 2D, nothing else)
+   - Nike swoosh + text (just the logo mark)
+   - Adidas trefoil + text (symbol and typography only)
+   - Starbucks siren circle + text (logo only, no cup)
 
-OUTPUT: A complete logo with BOTH icon/symbol AND '{$businessName}' text integrated together.";
+5. TECHNICAL REQUIREMENTS:
+   - Flat, vector-style, 2D design
+   - {$styleDesc} aesthetic
+   - Solid white background (#FFFFFF)
+   - Centered on canvas
+   - Clean, professional, iconic
+   - Logo graphic ONLY - nothing else in the image
+
+FINAL CHECK BEFORE GENERATING:
+- Is this JUST a logo (icon + text)?
+- Is there NO phone/hand/product/mockup?
+- Would this work in a brand guidelines PDF?
+
+If you answered YES to all three, proceed. OUTPUT: Logo graphic only.";
     }
 
     /**
@@ -395,15 +407,11 @@ OUTPUT: A complete logo with BOTH icon/symbol AND '{$businessName}' text integra
             // Get file contents
             $file = Storage::disk('public')->get($path);
 
-            // Determine mime type (all logos are PNG)
-            $mimeType = 'image/png';
-
             // Return file as download
+            // CORS headers are handled by Laravel CORS middleware
             return response($file, 200)
-                ->header('Content-Type', $mimeType)
-                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"')
-                ->header('Access-Control-Allow-Origin', '*')
-                ->header('Access-Control-Expose-Headers', 'Content-Disposition');
+                ->header('Content-Type', 'image/png')
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
 
         } catch (\Exception $e) {
             Log::error('Logo download error:', [
