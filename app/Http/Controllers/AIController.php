@@ -16,14 +16,20 @@ class AIController extends Controller
      */
     public function generateLogo(Request $request): JsonResponse
     {
-        $request->validate([
-            'business_name' => 'required|string|max:200',
-            'prompt' => 'required|string|max:1000',
-            'style' => 'required|string|in:modern,simple,creative,minimalist,professional,playful,elegant,bold',
-            'image' => 'nullable|image|max:5120' // max 5MB
-        ]);
+        Log::info('=== AI Logo Generation Request Started ===');
+        Log::info('Request method: ' . $request->method());
+        Log::info('Request data:', $request->all());
 
         try {
+            $request->validate([
+                'business_name' => 'required|string|max:200',
+                'prompt' => 'required|string|max:1000',
+                'style' => 'required|string|in:modern,simple,creative,minimalist,professional,playful,elegant,bold',
+                'image' => 'nullable|image|max:5120' // max 5MB
+            ]);
+
+            Log::info('Validation passed');
+
             $businessName = $request->input('business_name');
             $prompt = $request->input('prompt');
             $style = $request->input('style');
@@ -84,19 +90,24 @@ class AIController extends Controller
                                 // Download the image
                                 $imageContent = file_get_contents($imageUrl);
 
-                                // Process image: remove white background and make transparent
-                                $processedImage = $this->removeWhiteBackground($imageContent);
-
                                 $filename = 'logo-' . Str::uuid() . '.png';
                                 $path = 'ai-logos/' . $filename;
 
-                                // Save processed image with transparency
-                                Storage::disk('public')->put($path, $processedImage);
+                                // Try to process image with transparency, fallback to original if fails
+                                try {
+                                    Log::info("Starting background removal process");
+                                    $processedImage = $this->removeWhiteBackground($imageContent);
+                                    Storage::disk('public')->put($path, $processedImage);
+                                    Log::info("Background removed successfully");
+                                } catch (\Exception $processingError) {
+                                    Log::warning("Background removal failed, saving original: " . $processingError->getMessage());
+                                    Storage::disk('public')->put($path, $imageContent);
+                                }
 
                                 // Get full URL for the saved image
                                 $savedImageUrl = url('storage/' . $path);
 
-                                Log::info("Image saved successfully with transparent background", ['path' => $savedImageUrl]);
+                                Log::info("Image saved successfully", ['path' => $savedImageUrl]);
 
                                 $logoResults[] = [
                                     'id' => Str::uuid(),
@@ -104,18 +115,8 @@ class AIController extends Controller
                                     'prompt' => $variationPrompt
                                 ];
                             } catch (\Exception $e) {
-                                Log::error("Error processing/saving image: " . $e->getMessage());
-                                // Save original image if processing fails
-                                $filename = 'logo-' . Str::uuid() . '.png';
-                                $path = 'ai-logos/' . $filename;
-                                Storage::disk('public')->put($path, $imageContent);
-                                $savedImageUrl = url('storage/' . $path);
-
-                                $logoResults[] = [
-                                    'id' => Str::uuid(),
-                                    'imageUrl' => $savedImageUrl,
-                                    'prompt' => $variationPrompt
-                                ];
+                                Log::error("Error downloading/saving image: " . $e->getMessage());
+                                $errors[] = "Error saving image for variation " . ($i + 1) . ": " . $e->getMessage();
                             }
                         }
                     } else {
@@ -335,6 +336,20 @@ class AIController extends Controller
         $styleDesc = $styleDescriptions[$style] ?? 'modern';
 
         return "A {$styleDesc} logo design for '{$businessName}'. {$userPrompt}. IMPORTANT: Create ONLY the logo itself on a plain white background, NO mockups, NO business cards, NO packaging, NO product presentations. Just the clean logo mark that can be used anywhere. Vector-style, flat design, professional, simple, iconic, memorable. Centered on white background.";
+    }
+
+    /**
+     * Test endpoint to check if controller is working
+     */
+    public function testEndpoint(): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'message' => 'AI Controller is working',
+            'gd_available' => extension_loaded('gd'),
+            'php_version' => PHP_VERSION,
+            'memory_limit' => ini_get('memory_limit')
+        ]);
     }
 
     /**

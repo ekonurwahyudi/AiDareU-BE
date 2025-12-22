@@ -432,6 +432,7 @@ Route::middleware(['auth:sanctum,web'])->group(function () {
 
     // AI Branding Routes
     Route::prefix('ai')->group(function () {
+        Route::get('/test', [AIController::class, 'testEndpoint']);
         Route::post('/generate-logo', [AIController::class, 'generateLogo']);
         Route::post('/refine-logo', [AIController::class, 'refineLogo']);
     });
