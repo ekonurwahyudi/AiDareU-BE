@@ -6,7 +6,9 @@ RUN apk add --no-cache \
     nginx \
     git zip unzip \
     libpq-dev icu-dev oniguruma-dev \
-  && docker-php-ext-install intl mbstring bcmath pdo_pgsql
+    libpng-dev libjpeg-turbo-dev freetype-dev \
+  && docker-php-ext-configure gd --with-freetype --with-jpeg \
+  && docker-php-ext-install intl mbstring bcmath pdo_pgsql gd
 
 # Tambahkan Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer

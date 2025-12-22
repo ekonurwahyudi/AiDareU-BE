@@ -169,19 +169,25 @@ class AIController extends Controller
      */
     private function removeWhiteBackground(string $imageContent): string
     {
+        // Check if GD extension is loaded
+        if (!extension_loaded('gd')) {
+            Log::warning('GD extension not available, returning original image');
+            return $imageContent;
+        }
+
         try {
             // Increase memory limit for image processing
             $oldMemoryLimit = ini_get('memory_limit');
             ini_set('memory_limit', '512M');
 
             // Create image from string
-            $image = imagecreatefromstring($imageContent);
+            $image = @imagecreatefromstring($imageContent);
             if (!$image) {
                 Log::warning('Failed to create image from string, returning original');
                 ini_set('memory_limit', $oldMemoryLimit);
                 return $imageContent; // Return original if processing fails
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('Error in removeWhiteBackground: ' . $e->getMessage());
             return $imageContent;
         }
