@@ -329,51 +329,25 @@ class AIController extends Controller
     private function buildLogoPrompt(string $businessName, string $userPrompt, string $style): string
     {
         $styleDescriptions = [
-            'modern'      => 'modern, sleek, and contemporary with clean lines',
-            'simple'      => 'simple and minimalistic, easy to recognize',
-            'creative'    => 'creative and unique with artistic elements',
-            'minimalist'  => 'minimalist design with only essential elements',
-            'professional'=> 'professional and corporate, business-appropriate',
-            'playful'     => 'playful and fun with vibrant elements',
-            'elegant'     => 'elegant and sophisticated with a luxury feel',
-            'bold'        => 'bold, strong, and impactful',
+            'modern'      => 'modern, clean, flat style',
+            'simple'      => 'simple and minimalistic',
+            'creative'    => 'creative and unique',
+            'minimalist'  => 'minimalist with simple shapes',
+            'professional'=> 'professional corporate style',
+            'playful'     => 'playful with friendly shapes',
+            'elegant'     => 'elegant with refined lines',
+            'bold'        => 'bold and impactful',
         ];
 
-        $styleDesc = $styleDescriptions[$style] ?? 'modern, sleek, and contemporary with clean lines';
+        $styleDesc = $styleDescriptions[$style] ?? 'modern, clean, flat style';
 
-        return "
-Design a {$styleDesc} flat 2D logo for a business named '{$businessName}'.
-Business description / concept: {$userPrompt}
-
-LAYOUT:
-- Create a combination mark logo.
-- Use ONLY ONE of these layouts:
-  1) Icon on the left, '{$businessName}' text on the right (horizontal), OR
-  2) Icon on the top, '{$businessName}' text at the bottom (stacked).
-- Icon and text must be clearly separated and easy to read.
-
-CRITICAL REQUIREMENTS:
-1. Flat 2D vector-style logo on a pure white background (#FFFFFF).
-2. ONLY TWO visual elements:
-   - ONE unique custom icon / symbol representing the business.
-   - The text '{$businessName}' in clear, readable typography.
-3. No gradients, no textures, no realistic lighting; use clean solid shapes.
-4. Composition must be clean, centered, and scalable for app icon, website, and print.
-
-STRICTLY DO NOT:
-- Do NOT include existing brand logos or references (Tokopedia, Shopee, McDonald's, Apple, Starbucks, etc.).
-- Do NOT create mockups (no business cards, packaging, phones, laptops, storefronts, etc.).
-- Do NOT show physical products, people, hands, or any scene/context.
-- Do NOT create 3D, isometric, or perspective views.
-- Do NOT use shadows, depth effects, reflections, or realistic materials.
-- Do NOT add any extra text, tagline, or decorative elements besides the icon and '{$businessName}'.
-
-OUTPUT:
-A single, clean, flat logo file consisting ONLY of:
-- One custom icon/symbol, and
-- The '{$businessName}' text,
-on a pure white background, ready to be used directly as a brand logo.
-";
+        // Prompt pendek khusus untuk DALL·E
+        return "Flat 2D {$styleDesc} logo for a business named '{$businessName}'. "
+            ."Use a single, simple icon representing the business on the left and the text '{$businessName}' on the right, "
+            ."or the icon on top and the text '{$businessName}' at the bottom. "
+            ."Clean sans-serif typography, no mockups, no additional objects, no decorations, "
+            ."plain white background, centered, vector-style, high contrast. "
+            ."Business concept: {$userPrompt}.";
     }
 
     /**
