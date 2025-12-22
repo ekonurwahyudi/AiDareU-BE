@@ -80,28 +80,43 @@ class AIController extends Controller
                         Log::info("OpenAI response successful", ['has_url' => !is_null($imageUrl)]);
 
                         if ($imageUrl) {
-                            // Download the image
-                            $imageContent = file_get_contents($imageUrl);
+                            try {
+                                // Download the image
+                                $imageContent = file_get_contents($imageUrl);
 
-                            // Process image: remove white background and make transparent
-                            $processedImage = $this->removeWhiteBackground($imageContent);
+                                // Process image: remove white background and make transparent
+                                $processedImage = $this->removeWhiteBackground($imageContent);
 
-                            $filename = 'logo-' . Str::uuid() . '.png';
-                            $path = 'ai-logos/' . $filename;
+                                $filename = 'logo-' . Str::uuid() . '.png';
+                                $path = 'ai-logos/' . $filename;
 
-                            // Save processed image with transparency
-                            Storage::disk('public')->put($path, $processedImage);
+                                // Save processed image with transparency
+                                Storage::disk('public')->put($path, $processedImage);
 
-                            // Get full URL for the saved image
-                            $savedImageUrl = url('storage/' . $path);
+                                // Get full URL for the saved image
+                                $savedImageUrl = url('storage/' . $path);
 
-                            Log::info("Image saved successfully with transparent background", ['path' => $savedImageUrl]);
+                                Log::info("Image saved successfully with transparent background", ['path' => $savedImageUrl]);
 
-                            $logoResults[] = [
-                                'id' => Str::uuid(),
-                                'imageUrl' => $savedImageUrl,
-                                'prompt' => $variationPrompt
-                            ];
+                                $logoResults[] = [
+                                    'id' => Str::uuid(),
+                                    'imageUrl' => $savedImageUrl,
+                                    'prompt' => $variationPrompt
+                                ];
+                            } catch (\Exception $e) {
+                                Log::error("Error processing/saving image: " . $e->getMessage());
+                                // Save original image if processing fails
+                                $filename = 'logo-' . Str::uuid() . '.png';
+                                $path = 'ai-logos/' . $filename;
+                                Storage::disk('public')->put($path, $imageContent);
+                                $savedImageUrl = url('storage/' . $path);
+
+                                $logoResults[] = [
+                                    'id' => Str::uuid(),
+                                    'imageUrl' => $savedImageUrl,
+                                    'prompt' => $variationPrompt
+                                ];
+                            }
                         }
                     } else {
                         $errorMsg = 'OpenAI API error on variation ' . ($i + 1);
@@ -153,10 +168,21 @@ class AIController extends Controller
      */
     private function removeWhiteBackground(string $imageContent): string
     {
-        // Create image from string
-        $image = imagecreatefromstring($imageContent);
-        if (!$image) {
-            return $imageContent; // Return original if processing fails
+        try {
+            // Increase memory limit for image processing
+            $oldMemoryLimit = ini_get('memory_limit');
+            ini_set('memory_limit', '512M');
+
+            // Create image from string
+            $image = imagecreatefromstring($imageContent);
+            if (!$image) {
+                Log::warning('Failed to create image from string, returning original');
+                ini_set('memory_limit', $oldMemoryLimit);
+                return $imageContent; // Return original if processing fails
+            }
+        } catch (\Exception $e) {
+            Log::error('Error in removeWhiteBackground: ' . $e->getMessage());
+            return $imageContent;
         }
 
         // Get image dimensions
@@ -219,6 +245,11 @@ class AIController extends Controller
         // Clean up
         imagedestroy($image);
         imagedestroy($transparent);
+
+        // Restore memory limit
+        ini_set('memory_limit', $oldMemoryLimit);
+
+        Log::info('Image processed successfully with transparent background');
 
         return $processedContent;
     }
