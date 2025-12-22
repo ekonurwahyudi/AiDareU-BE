@@ -435,5 +435,6 @@ Route::middleware(['auth:sanctum,web'])->group(function () {
         Route::get('/test', [AIController::class, 'testEndpoint']);
         Route::post('/generate-logo', [AIController::class, 'generateLogo']);
         Route::post('/refine-logo', [AIController::class, 'refineLogo']);
+        Route::get('/download-logo/{filename}', [AIController::class, 'downloadLogo']);
     });
 });

@@ -341,21 +341,81 @@ class AIController extends Controller
 
         $styleDesc = $styleDescriptions[$style] ?? 'modern';
 
-        return "Design a {$styleDesc} logo icon for '{$businessName}'. {$userPrompt}.
+        return "Design a complete {$styleDesc} logo for '{$businessName}'. {$userPrompt}.
 
-STRICT RULES - VERY IMPORTANT:
-- Create ONLY the logo symbol/emblem itself - nothing else
-- NO phones, NO hands, NO mockups, NO products, NO packaging, NO physical objects of any kind
-- NO business cards, NO stationery, NO applications shown
-- DO NOT show the logo ON anything or IN any context
-- Just draw the logo mark itself on plain white background
-- Like these examples: Nike swoosh alone, Apple logo alone, Starbucks mermaid alone, Adidas trefoil alone, Target bullseye alone
-- This is the actual logo file - not a presentation or mockup
-- Vector-style, flat design, clean, professional, iconic
-- Perfect for use on websites, apps, products
-- Plain solid white background (#FFFFFF), centered
+STRICT REQUIREMENTS:
+1. LOGO MUST INCLUDE BOTH:
+   - A distinctive icon/symbol/emblem
+   - The business name '{$businessName}' as text (with proper typography)
 
-OUTPUT: Just the logo graphic itself - the symbol/icon/emblem only.";
+2. LAYOUT OPTIONS (choose one that fits best):
+   - Icon with text beside it (horizontal)
+   - Icon with text below it (stacked)
+   - Icon integrated with text
+   - Text with small icon element
+
+3. WHAT TO CREATE:
+   - Complete, ready-to-use logo combining icon + text
+   - Professional typography for the business name
+   - Cohesive design where icon and text work together
+   - Like: Adidas (trefoil + text), Starbucks (mermaid + text), Nike (swoosh + text)
+
+4. STRICT PROHIBITIONS:
+   - NO phones, NO hands, NO mockups, NO products, NO packaging
+   - NO business cards, NO stationery, NO physical objects
+   - DO NOT show logo ON anything - just the logo itself
+   - NO presentations or context - only the actual logo file
+
+5. STYLE:
+   - {$styleDesc}
+   - Vector-style, flat design, clean, professional
+   - Plain solid white background (#FFFFFF)
+   - Centered composition
+   - Ready for use on websites, apps, products
+
+OUTPUT: A complete logo with BOTH icon/symbol AND '{$businessName}' text integrated together.";
+    }
+
+    /**
+     * Download logo file
+     */
+    public function downloadLogo(string $filename)
+    {
+        try {
+            $path = 'ai-logos/' . $filename;
+
+            // Check if file exists
+            if (!Storage::disk('public')->exists($path)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Logo file not found'
+                ], 404);
+            }
+
+            // Get file contents
+            $file = Storage::disk('public')->get($path);
+
+            // Determine mime type (all logos are PNG)
+            $mimeType = 'image/png';
+
+            // Return file as download
+            return response($file, 200)
+                ->header('Content-Type', $mimeType)
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"')
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Expose-Headers', 'Content-Disposition');
+
+        } catch (\Exception $e) {
+            Log::error('Logo download error:', [
+                'filename' => $filename,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to download logo: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
