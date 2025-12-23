@@ -93,7 +93,7 @@ class AIProductPhotoController extends Controller
                             ],
                             [
                                 'name'     => 'cfg_scale',
-                                'contents' => '7', // background follows prompt well
+                                'contents' => '7',
                             ],
                             [
                                 'name'     => 'samples',
@@ -105,7 +105,7 @@ class AIProductPhotoController extends Controller
                             ],
                             [
                                 'name'     => 'mask_source',
-                                'contents' => 'MASK_IMAGE_BLACK', // black areas are preserved
+                                'contents' => 'MASK_IMAGE_WHITE', // WHITE areas are preserved (product)
                             ],
                             [
                                 'name'     => 'style_preset',
@@ -236,8 +236,8 @@ class AIProductPhotoController extends Controller
 
     /**
      * Generate simple center mask:
-     * - Black area (center) = product (preserved/protected)
-     * - White area (edges) = background (will be repainted)
+     * - WHITE area (center) = product (preserved/protected)
+     * - BLACK area (edges) = background (will be repainted)
      */
     private function generateSimpleCenterMask(string $aspectRatio): string
     {
@@ -255,12 +255,12 @@ class AIProductPhotoController extends Controller
         // Create mask canvas
         $mask = imagecreatetruecolor($width, $height);
 
-        // White = background area (will be changed)
-        $white = imagecolorallocate($mask, 255, 255, 255);
-        imagefilledrectangle($mask, 0, 0, $width, $height, $white);
-
-        // Black = product area (preserved)
+        // Black = background area (will be changed)
         $black = imagecolorallocate($mask, 0, 0, 0);
+        imagefilledrectangle($mask, 0, 0, $width, $height, $black);
+
+        // White = product area (preserved)
+        $white = imagecolorallocate($mask, 255, 255, 255);
 
         $centerX = (int) ($width / 2);
         $centerY = (int) ($height / 2);
@@ -275,7 +275,7 @@ class AIProductPhotoController extends Controller
         $x2 = $centerX + (int) ($rectWidth / 2);
         $y2 = $centerY + (int) ($rectHeight / 2);
 
-        imagefilledrectangle($mask, $x1, $y1, $x2, $y2, $black);
+        imagefilledrectangle($mask, $x1, $y1, $x2, $y2, $white);
 
         // Save to buffer
         ob_start();
