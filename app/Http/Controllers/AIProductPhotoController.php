@@ -68,7 +68,7 @@ class AIProductPhotoController extends Controller
                 'keep_original_background' => 'false',
                 'seed'                     => 0,
                 'light_source_strength'    => 0.3,
-                'light_source_direction'   => 'none',  // "none" / "left" / "right" / "above" / "below"
+                'light_source_direction'   => 'above',
             ];
 
             $photoResults = [];
