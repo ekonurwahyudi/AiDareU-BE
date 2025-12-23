@@ -12,19 +12,19 @@ use Illuminate\Support\Str;
 class AIProductPhotoController extends Controller
 {
     /**
-     * Generate professional product photo using OpenAI DALL-E
+     * Generate professional product photo using Stability AI image-to-image
      */
     public function generateProductPhoto(Request $request): JsonResponse
     {
-        Log::info('=== AI Product Photo Generation Request Started ===');
-        Log::info('Request data:', $request->all());
+        Log::info('=== AI Product Photo Generation Request Started (Stability AI) ===');
+        Log::info('Request data:', $request->except(['image']));
 
         try {
             $request->validate([
                 'image' => 'required|image|max:10240', // max 10MB
                 'lighting' => 'required|string|in:light,dark',
                 'ambiance' => 'required|string|in:clean,crowd',
-                'location' => 'nullable|string|in:indoor,outdoor', // only when ambiance is 'crowd'
+                'location' => 'nullable|string|in:indoor,outdoor',
                 'aspect_ratio' => 'required|string|in:1:1,3:4,16:9,9:16',
                 'additional_instructions' => 'nullable|string|max:500'
             ]);
@@ -34,134 +34,104 @@ class AIProductPhotoController extends Controller
             // Get parameters
             $lighting = $request->input('lighting');
             $ambiance = $request->input('ambiance');
-            $location = $request->input('location', 'indoor'); // default to indoor
+            $location = $request->input('location', 'indoor');
             $aspectRatio = $request->input('aspect_ratio');
             $additionalInstructions = $request->input('additional_instructions', '');
 
-            // Map aspect ratio to DALL-E size
-            $sizeMap = [
-                '1:1' => '1024x1024',
-                '3:4' => '1024x1792',  // Portrait
-                '16:9' => '1792x1024', // Landscape
-                '9:16' => '1024x1792'  // Portrait (same as 3:4 for DALL-E 3)
-            ];
-            $size = $sizeMap[$aspectRatio] ?? '1024x1024';
-
-            // Get OpenAI API key
-            $apiKey = env('OPENAI_API_KEY');
-            if (!$apiKey || empty(trim($apiKey))) {
-                Log::error('OpenAI API key not configured');
-                throw new \Exception('OpenAI API key belum dikonfigurasi. Silakan hubungi administrator.');
+            // Get Stability AI API key
+            $stabilityApiKey = env('STABILITY_API_KEY');
+            if (!$stabilityApiKey || empty(trim($stabilityApiKey))) {
+                Log::error('Stability AI API key not configured');
+                throw new \Exception('Stability AI API key belum dikonfigurasi. Silakan hubungi administrator.');
             }
 
-            // Step 1: Analyze uploaded image with GPT-4 Vision to extract product details
-            Log::info('Analyzing uploaded image with GPT-4 Vision');
+            // Step 1: Build the prompt for background transformation
+            $prompt = $this->buildPrompt($lighting, $ambiance, $location, $additionalInstructions);
+            Log::info('Generated prompt:', ['prompt' => $prompt]);
 
-            // Convert uploaded image to base64
-            $imageData = base64_encode(file_get_contents($request->file('image')->getRealPath()));
-            $imageBase64 = 'data:image/' . $request->file('image')->getClientOriginalExtension() . ';base64,' . $imageData;
+            // Step 2: Prepare the uploaded image
+            $uploadedFile = $request->file('image');
+            $imageContent = file_get_contents($uploadedFile->getRealPath());
 
-            // Use GPT-4 Vision to analyze the product
-            $visionResponse = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $apiKey,
-                'Content-Type' => 'application/json',
-            ])->timeout(60)->post('https://api.openai.com/v1/chat/completions', [
-                'model' => 'gpt-4o',
-                'messages' => [
-                    [
-                        'role' => 'user',
-                        'content' => [
-                            [
-                                'type' => 'text',
-                                'text' => 'Describe this product in extreme detail for AI image generation. Include: EXACT product type, EXACT colors (hex if possible), EXACT shape and dimensions, EXACT brand name and text visible, EXACT logo details, material (plastic/glass/metal), cap/lid design. Be extremely specific so AI can recreate it identically. Max 150 words.'
-                            ],
-                            [
-                                'type' => 'image_url',
-                                'image_url' => [
-                                    'url' => $imageBase64
-                                ]
-                            ]
-                        ]
-                    ]
-                ],
-                'max_tokens' => 400
-            ]);
-
-            $productDescription = '';
-            if ($visionResponse->successful()) {
-                $visionResult = $visionResponse->json();
-                $productDescription = $visionResult['choices'][0]['message']['content'] ?? '';
-                Log::info('GPT-4 Vision analysis:', ['description' => $productDescription]);
-            } else {
-                Log::warning('GPT-4 Vision failed, using generic description', [
-                    'status' => $visionResponse->status(),
-                    'body' => $visionResponse->body()
-                ]);
-                $productDescription = 'A product bottle';
-            }
-
-            // Step 2: Build enhanced prompt using product description from Vision AI
-            $enhancedPrompt = $this->buildProductPhotoPrompt($productDescription, $lighting, $ambiance, $location, $additionalInstructions);
-            Log::info('Generated base prompt:', ['prompt' => $enhancedPrompt]);
-
-            // Step 3: Generate 4 product photo variations using the analyzed description
+            // Step 3: Generate 4 variations using Stability AI
             $photoResults = [];
             $errors = [];
 
+            // Different strength values for variations
+            $strengthValues = [0.35, 0.40, 0.45, 0.50];
+
             for ($i = 0; $i < 4; $i++) {
                 try {
-                    // Add variation to prompt
-                    $variationPrompt = $enhancedPrompt . " Variation " . ($i + 1) . ".";
+                    $strength = $strengthValues[$i];
+                    Log::info("Generating variation " . ($i + 1) . " with strength: {$strength}");
 
-                    Log::info("Generating photo variation " . ($i + 1), ['prompt' => $variationPrompt]);
-
-                    // Call OpenAI DALL-E API
+                    // Call Stability AI image-to-image API
                     $response = Http::withHeaders([
-                        'Authorization' => 'Bearer ' . $apiKey,
-                        'Content-Type' => 'application/json',
-                    ])->timeout(60)->post('https://api.openai.com/v1/images/generations', [
-                        'model' => 'dall-e-3',
-                        'prompt' => $variationPrompt,
-                        'n' => 1,
-                        'size' => $size,
-                        'quality' => 'standard',
-                        'response_format' => 'url'
+                        'Authorization' => 'Bearer ' . $stabilityApiKey,
+                        'Accept' => 'application/json',
+                    ])
+                    ->timeout(120)
+                    ->asMultipart()
+                    ->attach('init_image', $imageContent, 'image.png')
+                    ->post('https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image', [
+                        [
+                            'name' => 'text_prompts[0][text]',
+                            'contents' => $prompt
+                        ],
+                        [
+                            'name' => 'text_prompts[0][weight]',
+                            'contents' => '1'
+                        ],
+                        [
+                            'name' => 'cfg_scale',
+                            'contents' => '7'
+                        ],
+                        [
+                            'name' => 'samples',
+                            'contents' => '1'
+                        ],
+                        [
+                            'name' => 'steps',
+                            'contents' => '30'
+                        ],
+                        [
+                            'name' => 'image_strength',
+                            'contents' => (string)$strength
+                        ],
+                        [
+                            'name' => 'style_preset',
+                            'contents' => 'photographic'
+                        ]
                     ]);
 
                     if ($response->successful()) {
                         $result = $response->json();
-                        $imageUrl = $result['data'][0]['url'] ?? null;
 
-                        Log::info("OpenAI response successful", ['has_url' => !is_null($imageUrl)]);
+                        Log::info("Stability AI response successful for variation " . ($i + 1));
 
-                        if ($imageUrl) {
-                            try {
-                                // Download the image
-                                $imageContent = file_get_contents($imageUrl);
+                        if (isset($result['artifacts']) && count($result['artifacts']) > 0) {
+                            $base64Image = $result['artifacts'][0]['base64'];
 
-                                $filename = 'product-photo-' . Str::uuid() . '.png';
-                                $path = 'ai-product-photos/' . $filename;
+                            // Decode and save the image
+                            $imageData = base64_decode($base64Image);
+                            $filename = 'product-photo-' . Str::uuid() . '.png';
+                            $path = 'ai-product-photos/' . $filename;
 
-                                // Save the image
-                                Storage::disk('public')->put($path, $imageContent);
+                            Storage::disk('public')->put($path, $imageData);
 
-                                // Get full URL for the saved image (force HTTPS)
-                                $savedImageUrl = str_replace('http://', 'https://', url('storage/' . $path));
+                            // Get full URL (force HTTPS)
+                            $savedImageUrl = str_replace('http://', 'https://', url('storage/' . $path));
 
-                                Log::info("Image saved successfully", ['path' => $savedImageUrl]);
+                            Log::info("Image saved successfully", ['path' => $savedImageUrl]);
 
-                                $photoResults[] = [
-                                    'id' => Str::uuid(),
-                                    'imageUrl' => $savedImageUrl,
-                                    'prompt' => $variationPrompt
-                                ];
-                            } catch (\Exception $e) {
-                                Log::error("Error downloading/saving image: " . $e->getMessage());
-                                $errors[] = "Error saving image for variation " . ($i + 1) . ": " . $e->getMessage();
-                            }
+                            $photoResults[] = [
+                                'id' => Str::uuid(),
+                                'imageUrl' => $savedImageUrl,
+                                'strength' => $strength
+                            ];
                         }
                     } else {
-                        $errorMsg = 'OpenAI API error on variation ' . ($i + 1);
+                        $errorMsg = 'Stability AI error on variation ' . ($i + 1);
                         Log::error($errorMsg, [
                             'status' => $response->status(),
                             'body' => $response->body()
@@ -169,9 +139,9 @@ class AIProductPhotoController extends Controller
                         $errors[] = $errorMsg . ': ' . $response->body();
                     }
 
-                    // Add small delay between requests
+                    // Add delay between requests
                     if ($i < 3) {
-                        sleep(1);
+                        sleep(2);
                     }
                 } catch (\Exception $e) {
                     $errorMsg = 'Error generating variation ' . ($i + 1);
@@ -189,7 +159,7 @@ class AIProductPhotoController extends Controller
                 'success' => true,
                 'message' => 'Product photos generated successfully',
                 'data' => $photoResults,
-                'errors' => $errors // Include any partial errors
+                'errors' => $errors
             ]);
 
         } catch (\Exception $e) {
@@ -206,50 +176,44 @@ class AIProductPhotoController extends Controller
     }
 
     /**
-     * Build enhanced prompt for product photo generation
+     * Build prompt for Stability AI image-to-image
      */
-    private function buildProductPhotoPrompt(string $productDescription, string $lighting, string $ambiance, string $location, string $additionalInstructions): string
+    private function buildPrompt(string $lighting, string $ambiance, string $location, string $additionalInstructions): string
     {
         $lightingDescriptions = [
-            'light' => 'bright natural daylight, soft shadows, airy and fresh atmosphere',
-            'dark' => 'dramatic moody lighting, dark elegant background, sophisticated ambiance'
+            'light' => 'bright natural daylight, soft shadows, well-lit, fresh atmosphere',
+            'dark' => 'dramatic moody lighting, dark background, low-key lighting, cinematic'
         ];
 
         $ambianceDescriptions = [
-            'clean' => 'minimalist clean studio background, simple elegant backdrop, focus on product only',
-            'crowd' => 'lifestyle setting with natural props and contextual elements, real-world environment'
+            'clean' => 'clean minimalist studio background, simple elegant backdrop, professional product photography',
+            'crowd' => 'lifestyle setting with natural props, contextual environment, real-world scene'
         ];
 
         $locationDescriptions = [
-            'indoor' => 'indoor setting, cozy interior space',
-            'outdoor' => 'outdoor natural environment, open air setting'
+            'indoor' => 'indoor interior setting, cozy room',
+            'outdoor' => 'outdoor natural environment, open air'
         ];
 
         $lightingDesc = $lightingDescriptions[$lighting] ?? 'bright natural daylight';
-        $ambianceDesc = $ambianceDescriptions[$ambiance] ?? 'minimalist clean studio background';
+        $ambianceDesc = $ambianceDescriptions[$ambiance] ?? 'clean studio background';
 
-        // Use product description from Vision AI as the base
-        $basePrompt = "Professional product photography. ";
-        $basePrompt .= "Product details (MUST BE EXACT): {$productDescription}. ";
-        $basePrompt .= "Photography style: {$lightingDesc}, {$ambianceDesc}";
+        // Build prompt - focus on background/environment change
+        $prompt = "Professional product photography, {$lightingDesc}, {$ambianceDesc}";
 
-        // Add location description only if ambiance is 'crowd'
+        // Add location if crowd
         if ($ambiance === 'crowd') {
             $locationDesc = $locationDescriptions[$location] ?? 'indoor setting';
-            $basePrompt .= ", {$locationDesc}";
+            $prompt .= ", {$locationDesc}";
         }
-
-        $basePrompt .= ". IMPORTANT: Recreate the EXACT product with EXACT colors, EXACT text, EXACT logo. ";
-        $basePrompt .= "Only change the background/setting. Product must be identical to description. ";
-        $basePrompt .= "High-end commercial photography, sharp focus on product, professional composition. ";
 
         if (!empty($additionalInstructions)) {
-            $basePrompt .= "Scene styling: {$additionalInstructions}. ";
+            $prompt .= ", {$additionalInstructions}";
         }
 
-        $basePrompt .= "Photo-realistic, 8K quality, product must match description perfectly.";
+        $prompt .= ", high-end commercial quality, sharp focus, beautiful composition, photo-realistic, 4K";
 
-        return $basePrompt;
+        return $prompt;
     }
 
     /**
@@ -259,9 +223,9 @@ class AIProductPhotoController extends Controller
     {
         return response()->json([
             'success' => true,
-            'message' => 'AI Product Photo Controller is working',
+            'message' => 'AI Product Photo Controller is working (Stability AI)',
             'php_version' => PHP_VERSION,
-            'openai_configured' => !empty(env('OPENAI_API_KEY'))
+            'stability_configured' => !empty(env('STABILITY_API_KEY'))
         ]);
     }
 }
