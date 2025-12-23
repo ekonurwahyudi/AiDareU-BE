@@ -101,29 +101,20 @@ class AIProductPhotoController extends Controller
                             $filename     = 'product-photo-' . Str::uuid() . '.png';
                             $path         = 'ai-product-photos/' . $filename;
 
-                            // Save original image
+                            // Save original image only (no compression for now to match logo behavior)
                             Storage::disk('public')->put($path, $imageContent);
 
-                            // Create compressed version for display
-                            $compressedFilename = 'compressed-' . $filename;
-                            $compressedPath = 'ai-product-photos/' . $compressedFilename;
-                            $compressedContent = $this->compressImage($imageContent);
-                            Storage::disk('public')->put($compressedPath, $compressedContent);
+                            // Get full URL for the saved image (force HTTPS for production)
+                            $savedImageUrl = str_replace('http://', 'https://', url('storage/' . $path));
 
-                            // URLs for display (compressed) and download (original)
-                            $displayUrl = str_replace('http://', 'https://', url('storage/' . $compressedPath));
-                            $downloadUrl = str_replace('http://', 'https://', url('storage/' . $path));
-
-                            Log::info('Product photo URLs generated', [
-                                'display' => $displayUrl,
-                                'download' => $downloadUrl,
+                            Log::info('Product photo URL generated', [
+                                'url' => $savedImageUrl,
                                 'filename' => $filename
                             ]);
 
                             $photoResults[] = [
                                 'id' => (string) Str::uuid(),
-                                'imageUrl' => $displayUrl, // Compressed untuk tampilan cepat
-                                'downloadUrl' => $downloadUrl, // Original untuk download
+                                'imageUrl' => $savedImageUrl, // Same URL for display and download
                                 'filename' => $filename,
                                 'prompt' => $prompt
                             ];
@@ -167,6 +158,7 @@ class AIProductPhotoController extends Controller
             Log::error('Product photo generation error:', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
+                'request_data' => request()->all()
             ]);
 
             return response()->json([
