@@ -101,13 +101,23 @@ class AIProductPhotoController extends Controller
                             $filename     = 'product-photo-' . Str::uuid() . '.png';
                             $path         = 'ai-product-photos/' . $filename;
 
+                            // Save original image
                             Storage::disk('public')->put($path, $imageContent);
 
-                            $savedUrl = str_replace('http://', 'https://', url('storage/' . $path));
+                            // Create compressed version for display
+                            $compressedFilename = 'compressed-' . $filename;
+                            $compressedPath = 'ai-product-photos/' . $compressedFilename;
+                            $compressedContent = $this->compressImage($imageContent);
+                            Storage::disk('public')->put($compressedPath, $compressedContent);
+
+                            $savedUrl = str_replace('http://', 'https://', url('storage/' . $compressedPath));
+                            $originalUrl = str_replace('http://', 'https://', url('storage/' . $path));
 
                             $photoResults[] = [
                                 'id'       => (string) Str::uuid(),
-                                'imageUrl' => $savedUrl,
+                                'imageUrl' => $savedUrl, // Compressed for display
+                                'originalUrl' => $originalUrl, // Original for download
+                                'filename' => $filename, // Original filename for download
                             ];
                         } else {
                             $errorMsg = 'fal.ai error on variation ' . ($i + 1) . ' (no images in response)';
@@ -302,6 +312,128 @@ class AIProductPhotoController extends Controller
         imagedestroy($resizedImage);
 
         return $imageContent;
+    }
+
+    /**
+     * Compress image for faster loading while maintaining quality
+     */
+    private function compressImage(string $imageContent): string
+    {
+        // Check if GD extension is loaded
+        if (!extension_loaded('gd')) {
+            Log::warning('GD extension not available, returning original image');
+            return $imageContent;
+        }
+
+        try {
+            // Create image from string
+            $image = @imagecreatefromstring($imageContent);
+            if (!$image) {
+                Log::warning('Failed to create image from string, returning original');
+                return $imageContent;
+            }
+
+            $width = imagesx($image);
+            $height = imagesy($image);
+
+            // Calculate new dimensions (max 800px on longest side for display)
+            $maxSize = 800;
+            if ($width > $height) {
+                if ($width > $maxSize) {
+                    $newWidth = $maxSize;
+                    $newHeight = intval(($height * $maxSize) / $width);
+                } else {
+                    $newWidth = $width;
+                    $newHeight = $height;
+                }
+            } else {
+                if ($height > $maxSize) {
+                    $newHeight = $maxSize;
+                    $newWidth = intval(($width * $maxSize) / $height);
+                } else {
+                    $newWidth = $width;
+                    $newHeight = $height;
+                }
+            }
+
+            // Create new image with calculated dimensions
+            $compressedImage = imagecreatetruecolor($newWidth, $newHeight);
+
+            // Preserve transparency for PNG
+            imagealphablending($compressedImage, false);
+            imagesavealpha($compressedImage, true);
+            $transparent = imagecolorallocatealpha($compressedImage, 0, 0, 0, 127);
+            imagefill($compressedImage, 0, 0, $transparent);
+
+            // Resize image
+            imagecopyresampled(
+                $compressedImage,
+                $image,
+                0, 0, 0, 0,
+                $newWidth, $newHeight,
+                $width, $height
+            );
+
+            // Save to buffer with compression
+            ob_start();
+            imagepng($compressedImage, null, 6); // Compression level 6 (good balance)
+            $compressedContent = ob_get_contents();
+            ob_end_clean();
+
+            // Clean up
+            imagedestroy($image);
+            imagedestroy($compressedImage);
+
+            Log::info('Image compressed successfully', [
+                'original_size' => strlen($imageContent),
+                'compressed_size' => strlen($compressedContent),
+                'compression_ratio' => round((1 - strlen($compressedContent) / strlen($imageContent)) * 100, 2) . '%'
+            ]);
+
+            return $compressedContent;
+
+        } catch (\Exception $e) {
+            Log::error('Error compressing image: ' . $e->getMessage());
+            return $imageContent; // Return original if compression fails
+        }
+    }
+
+    /**
+     * Download product photo file
+     */
+    public function downloadProductPhoto(string $filename)
+    {
+        try {
+            $path = 'ai-product-photos/' . $filename;
+
+            // Check if file exists
+            if (!Storage::disk('public')->exists($path)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Product photo file not found'
+                ], 404);
+            }
+
+            // Get file contents
+            $file = Storage::disk('public')->get($path);
+
+            // Return file as download
+            // Note: CORS headers are automatically added by Laravel CORS middleware
+            return response($file, 200)
+                ->header('Content-Type', 'image/png')
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+
+        } catch (\Exception $e) {
+            Log::error('Product photo download error:', [
+                'filename' => $filename,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to download product photo: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
