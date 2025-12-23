@@ -12,60 +12,57 @@ use Illuminate\Support\Str;
 class AIProductPhotoController extends Controller
 {
     /**
-     * Generate product photo dengan SDXL inpainting:
-     * produk dipertahankan 100%, background diganti.
+     * Generate product photos with SDXL inpainting:
+     * produk asli dipertahankan, background diganti.
      */
     public function generateProductPhoto(Request $request): JsonResponse
     {
-        Log::info('=== AI Product Photo Generation (Inpainting) Started ===');
-
         try {
+            // 1. Validasi input
             $request->validate([
-                'image'                   => 'required|image|max:10240',  // foto produk
-                'mask'                    => 'nullable|image|max:10240',  // optional user mask
-                'lighting'                => 'required|string|in:light,dark',
-                'ambiance'                => 'required|string|in:clean,crowd',
-                'location'                => 'nullable|string|in:indoor,outdoor',
-                'aspect_ratio'            => 'required|string|in:1:1,3:4,16:9,9:16',
-                'additional_instructions' => 'nullable|string|max:500',
+                'image'                  => 'required|image|max:10240',  // foto produk
+                'mask'                   => 'nullable|image|max:10240',  // mask optional
+                'lighting'               => 'required|string|in:light,dark',
+                'ambiance'               => 'required|string|in:clean,crowd',
+                'location'               => 'nullable|string|in:indoor,outdoor',
+                'aspect_ratio'           => 'required|string|in:1:1,3:4,16:9,9:16',
+                'additional_instructions'=> 'nullable|string|max:500',
             ]);
 
             Log::info('Validation passed');
 
-            $lighting   = $request->input('lighting');
-            $ambiance   = $request->input('ambiance');
-            $location   = $request->input('location', 'indoor');
-            $aspectRatio= $request->input('aspect_ratio');
-            $additional = $request->input('additional_instructions', '');
+            $lighting     = $request->input('lighting');
+            $ambiance     = $request->input('ambiance');
+            $location     = $request->input('location', 'indoor');
+            $aspectRatio  = $request->input('aspect_ratio');
+            $additional   = $request->input('additional_instructions', '');
 
-            // Get Stability AI API key
+            // 2. API key
             $stabilityApiKey = env('STABILITY_API_KEY');
             if (!$stabilityApiKey || empty(trim($stabilityApiKey))) {
                 Log::error('Stability AI API key not configured');
                 throw new \Exception('Stability AI API key belum dikonfigurasi. Silakan hubungi administrator.');
             }
 
-            // Step 1: Resize foto produk ke resolusi SDXL
+            // 3. Resize foto produk ke resolusi SDXL
             $uploadedFile = $request->file('image');
             $initImage    = $this->resizeImageForSDXL($uploadedFile->getRealPath(), $aspectRatio);
             Log::info('Product image resized for SDXL', ['aspect_ratio' => $aspectRatio]);
 
-            // Step 2: Generate or use uploaded mask
+            // 4. Mask: pakai upload user kalau ada, kalau tidak generate otomatis
             if ($request->hasFile('mask')) {
-                // User uploaded custom mask
                 $maskImage = $this->resizeImageForSDXL($request->file('mask')->getRealPath(), $aspectRatio);
                 Log::info('Using user-uploaded mask');
             } else {
-                // Auto-generate simple center mask (product in center is protected)
                 $maskImage = $this->generateSimpleCenterMask($aspectRatio);
                 Log::info('Generated automatic center mask');
             }
 
-            // Step 3: Build background prompt
+            // 5. Prompt background
             $prompt = $this->buildBackgroundPrompt($lighting, $ambiance, $location, $additional);
             Log::info('Generated prompt', ['prompt' => $prompt]);
 
-            // Step 4: Generate 4 variations using SDXL inpainting
+            // 6. Panggil SDXL inpainting 4x (4 variasi)
             $photoResults = [];
             $errors       = [];
 
@@ -73,7 +70,6 @@ class AIProductPhotoController extends Controller
                 try {
                     Log::info('Generating inpainting variation ' . ($i + 1));
 
-                    // Call Stability AI inpainting endpoint
                     $response = Http::withHeaders([
                             'Authorization' => 'Bearer ' . $stabilityApiKey,
                             'Accept'        => 'application/json',
@@ -93,7 +89,7 @@ class AIProductPhotoController extends Controller
                             ],
                             [
                                 'name'     => 'cfg_scale',
-                                'contents' => '7',
+                                'contents' => '7',   // background mengikuti prompt
                             ],
                             [
                                 'name'     => 'samples',
@@ -105,7 +101,7 @@ class AIProductPhotoController extends Controller
                             ],
                             [
                                 'name'     => 'mask_source',
-                                'contents' => 'MASK_IMAGE_WHITE', // WHITE areas are preserved (product)
+                                'contents' => 'MASK_IMAGE_BLACK', // HITAM dipertahankan, PUTIH di‑paint
                             ],
                             [
                                 'name'     => 'style_preset',
@@ -117,17 +113,15 @@ class AIProductPhotoController extends Controller
                         $result = $response->json();
                         Log::info('Stability AI inpainting response successful for variation ' . ($i + 1));
 
-                        if (isset($result['artifacts']) && count($result['artifacts']) > 0) {
+                        if (!empty($result['artifacts'][0]['base64'] ?? null)) {
                             $base64Image = $result['artifacts'][0]['base64'];
 
-                            // Decode & save
                             $imageData = base64_decode($base64Image);
                             $filename  = 'product-photo-' . Str::uuid() . '.png';
                             $path      = 'ai-product-photos/' . $filename;
 
                             Storage::disk('public')->put($path, $imageData);
 
-                            // Force HTTPS URL
                             $savedImageUrl = str_replace('http://', 'https://', url('storage/' . $path));
                             Log::info('Image saved successfully', ['path' => $savedImageUrl]);
 
@@ -152,7 +146,6 @@ class AIProductPhotoController extends Controller
                         $errors[] = $errorMsg . ': ' . $response->body();
                     }
 
-                    // Small delay between requests
                     if ($i < 3) {
                         sleep(2);
                     }
@@ -163,7 +156,6 @@ class AIProductPhotoController extends Controller
                 }
             }
 
-            // Check if any photos were generated successfully
             if (empty($photoResults)) {
                 $errorDetails = !empty($errors) ? ' Errors: ' . implode('; ', $errors) : '';
                 throw new \Exception('Failed to generate any product photos. Please try again.' . $errorDetails);
@@ -189,7 +181,7 @@ class AIProductPhotoController extends Controller
     }
 
     /**
-     * Build prompt khusus untuk background (produk sudah dilindungi oleh mask).
+     * Prompt khusus background – produk sudah dilindungi mask.
      */
     private function buildBackgroundPrompt(
         string $lighting,
@@ -212,32 +204,32 @@ class AIProductPhotoController extends Controller
             'outdoor' => 'outdoor natural environment, open air',
         ];
 
-        $lightingDesc = $lightingDescriptions[$lighting] ?? 'bright natural daylight';
-        $ambianceDesc = $ambianceDescriptions[$ambiance] ?? 'clean minimalist studio background';
+        $lightingDesc  = $lightingDescriptions[$lighting] ?? 'bright natural daylight';
+        $ambianceDesc  = $ambianceDescriptions[$ambiance] ?? 'clean minimalist studio background';
 
-        // Prompt fokus pada background saja, produk sudah dilindungi mask
-        $prompt = "Create a new professional background and environment for product photography. "
-                . "Do not alter the product in the masked area. "
+        $prompt = "Create a new professional background and environment for commercial product photography. "
+                . "Do not alter or redraw the product inside the masked area at all. "
+                . "Add natural surface and soft realistic shadows under the product so it looks grounded. "
                 . "{$lightingDesc}, {$ambianceDesc}";
 
         if ($ambiance === 'crowd') {
             $locationDesc = $locationDescriptions[$location] ?? 'indoor interior setting';
-            $prompt .= ", {$locationDesc}";
+            $prompt      .= ", {$locationDesc}";
         }
 
         if (!empty($additionalInstructions)) {
             $prompt .= ", {$additionalInstructions}";
         }
 
-        $prompt .= ", professional commercial photography, realistic, high resolution, 8K quality";
+        $prompt .= ", depth of field, softly blurred background, realistic, high resolution, 8K commercial photoshoot";
 
         return $prompt;
     }
 
     /**
-     * Generate simple center mask:
-     * - WHITE area (center) = product (preserved/protected)
-     * - BLACK area (edges) = background (will be repainted)
+     * Generate mask sederhana:
+     * - HITAM (center) = produk (dipertahankan)
+     * - PUTIH (edges)  = background (akan digambar ulang)
      */
     private function generateSimpleCenterMask(string $aspectRatio): string
     {
@@ -249,35 +241,30 @@ class AIProductPhotoController extends Controller
         ];
 
         $dimensions = $dimensionsMap[$aspectRatio] ?? [1024, 1024];
-        $width      = $dimensions[0];
-        $height     = $dimensions[1];
+        [$width, $height] = $dimensions;
 
-        // Create mask canvas
         $mask = imagecreatetruecolor($width, $height);
 
-        // Black = background area (will be changed)
-        $black = imagecolorallocate($mask, 0, 0, 0);
-        imagefilledrectangle($mask, 0, 0, $width, $height, $black);
-
-        // White = product area (preserved)
+        // PUTIH = background (di‑paint)
         $white = imagecolorallocate($mask, 255, 255, 255);
+        imagefilledrectangle($mask, 0, 0, $width, $height, $white);
 
+        // HITAM = produk (dilindungi)
+        $black   = imagecolorallocate($mask, 0, 0, 0);
         $centerX = (int) ($width / 2);
         $centerY = (int) ($height / 2);
 
-        // Rectangle in center (50% width, 70% height) - adjust as needed
-        // This assumes product is centered in the image
-        $rectWidth  = (int) ($width * 0.50);
-        $rectHeight = (int) ($height * 0.70);
+        // Persegi tengah – bisa disesuaikan kalau produkmu tinggi/rendah
+        $rectWidth  = (int) ($width * 0.40);
+        $rectHeight = (int) ($height * 0.65);
 
         $x1 = $centerX - (int) ($rectWidth / 2);
         $y1 = $centerY - (int) ($rectHeight / 2);
         $x2 = $centerX + (int) ($rectWidth / 2);
         $y2 = $centerY + (int) ($rectHeight / 2);
 
-        imagefilledrectangle($mask, $x1, $y1, $x2, $y2, $white);
+        imagefilledrectangle($mask, $x1, $y1, $x2, $y2, $black);
 
-        // Save to buffer
         ob_start();
         imagepng($mask, null, 9);
         $maskContent = ob_get_clean();
@@ -288,7 +275,7 @@ class AIProductPhotoController extends Controller
     }
 
     /**
-     * Resize image to SDXL-compatible dimensions based on aspect ratio.
+     * Resize image ke dimensi SDXL sesuai aspect ratio.
      */
     private function resizeImageForSDXL(string $imagePath, string $aspectRatio): string
     {
@@ -303,7 +290,6 @@ class AIProductPhotoController extends Controller
         $targetWidth  = $dimensions[0];
         $targetHeight = $dimensions[1];
 
-        // Create image from file
         $imageInfo = getimagesize($imagePath);
         $mimeType  = $imageInfo['mime'] ?? null;
 
@@ -321,44 +307,36 @@ class AIProductPhotoController extends Controller
                 throw new \Exception('Unsupported image format. Please use JPG, PNG, or WEBP.');
         }
 
-        // Create new canvas
         $resizedImage = imagecreatetruecolor($targetWidth, $targetHeight);
 
-        // Handle transparency for PNG
         if ($mimeType === 'image/png') {
             imagealphablending($resizedImage, false);
             imagesavealpha($resizedImage, true);
             $transparent = imagecolorallocatealpha($resizedImage, 255, 255, 255, 127);
             imagefilledrectangle($resizedImage, 0, 0, $targetWidth, $targetHeight, $transparent);
         } else {
-            // White background for JPG/WebP
             $white = imagecolorallocate($resizedImage, 255, 255, 255);
             imagefilledrectangle($resizedImage, 0, 0, $targetWidth, $targetHeight, $white);
         }
 
-        // Get source dimensions
         $sourceWidth  = imagesx($sourceImage);
         $sourceHeight = imagesy($sourceImage);
 
-        // Calculate scaling (cover mode - maintain aspect ratio)
         $sourceAspect = $sourceWidth / $sourceHeight;
         $targetAspect = $targetWidth / $targetHeight;
 
         if ($sourceAspect > $targetAspect) {
-            // Source is wider - fit to height
             $scaledHeight = $targetHeight;
             $scaledWidth  = (int) ($targetHeight * $sourceAspect);
             $offsetX      = (int) (($targetWidth - $scaledWidth) / 2);
             $offsetY      = 0;
         } else {
-            // Source is taller - fit to width
             $scaledWidth  = $targetWidth;
             $scaledHeight = (int) ($targetWidth / $sourceAspect);
             $offsetX      = 0;
             $offsetY      = (int) (($targetHeight - $scaledHeight) / 2);
         }
 
-        // Resize and copy
         imagecopyresampled(
             $resizedImage,
             $sourceImage,
@@ -372,7 +350,6 @@ class AIProductPhotoController extends Controller
             $sourceHeight
         );
 
-        // Save to buffer
         ob_start();
         imagepng($resizedImage, null, 9);
         $imageContent = ob_get_clean();
@@ -384,16 +361,16 @@ class AIProductPhotoController extends Controller
     }
 
     /**
-     * Test endpoint to check if controller is working.
+     * Test endpoint.
      */
     public function testEndpoint(): JsonResponse
     {
         return response()->json([
-            'success'             => true,
-            'message'             => 'AI Product Photo Controller (Inpainting) is working',
-            'php_version'         => PHP_VERSION,
-            'stability_configured'=> !empty(env('STABILITY_API_KEY')),
-            'gd_enabled'          => extension_loaded('gd'),
+            'success'              => true,
+            'message'              => 'AI Product Photo Controller (Inpainting) is working',
+            'php_version'          => PHP_VERSION,
+            'stability_configured' => !empty(env('STABILITY_API_KEY')),
+            'gd_enabled'           => extension_loaded('gd'),
         ]);
     }
 }
