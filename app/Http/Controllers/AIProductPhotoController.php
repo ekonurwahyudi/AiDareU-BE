@@ -58,8 +58,9 @@ class AIProductPhotoController extends Controller
             $photoResults = [];
             $errors = [];
 
-            // Different strength values for variations
-            $strengthValues = [0.35, 0.40, 0.45, 0.50];
+            // Different strength values for variations (lower = more similar to original)
+            // 0.15-0.25 range keeps product intact, only changes background
+            $strengthValues = [0.15, 0.18, 0.21, 0.25];
 
             for ($i = 0; $i < 4; $i++) {
                 try {
@@ -199,8 +200,9 @@ class AIProductPhotoController extends Controller
         $lightingDesc = $lightingDescriptions[$lighting] ?? 'bright natural daylight';
         $ambianceDesc = $ambianceDescriptions[$ambiance] ?? 'clean studio background';
 
-        // Build prompt - focus on background/environment change
-        $prompt = "Professional product photography, {$lightingDesc}, {$ambianceDesc}";
+        // Build prompt - CRITICAL: Keep product unchanged, only transform background
+        $prompt = "Product photography with professional background, keep the product bottle exactly as is, only change the background and setting";
+        $prompt .= ", {$lightingDesc}, {$ambianceDesc}";
 
         // Add location if crowd
         if ($ambiance === 'crowd') {
@@ -212,7 +214,7 @@ class AIProductPhotoController extends Controller
             $prompt .= ", {$additionalInstructions}";
         }
 
-        $prompt .= ", high-end commercial quality, sharp focus, beautiful composition, photo-realistic, 4K";
+        $prompt .= ", preserve product appearance, professional commercial photography, sharp focus, 8K quality";
 
         return $prompt;
     }
