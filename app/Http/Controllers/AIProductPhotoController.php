@@ -12,16 +12,15 @@ use Illuminate\Support\Str;
 class AIProductPhotoController extends Controller
 {
     /**
-     * Generate product photos with SDXL inpainting:
-     * produk asli dipertahankan, background diganti.
+     * Generate foto produk:
+     * produk asli dipertahankan, background + pencahayaan diganti.
      */
     public function generateProductPhoto(Request $request): JsonResponse
     {
         try {
-            // 1. Validasi input
+            // 1. Validasi input dari frontend
             $request->validate([
-                'image'                  => 'required|image|max:10240',  // foto produk
-                'mask'                   => 'nullable|image|max:10240',  // mask optional
+                'image'                  => 'required|image|max:10240',
                 'lighting'               => 'required|string|in:light,dark',
                 'ambiance'               => 'required|string|in:clean,crowd',
                 'location'               => 'nullable|string|in:indoor,outdoor',
@@ -29,7 +28,7 @@ class AIProductPhotoController extends Controller
                 'additional_instructions'=> 'nullable|string|max:500',
             ]);
 
-            Log::info('Validation passed');
+            Log::info('AI Product Photo: validation passed');
 
             $lighting     = $request->input('lighting');
             $ambiance     = $request->input('ambiance');
@@ -37,138 +36,107 @@ class AIProductPhotoController extends Controller
             $aspectRatio  = $request->input('aspect_ratio');
             $additional   = $request->input('additional_instructions', '');
 
-            // 2. API key
-            $stabilityApiKey = env('STABILITY_API_KEY');
-            if (!$stabilityApiKey || empty(trim($stabilityApiKey))) {
+            // 2. API key Stability
+            $apiKey = env('STABILITY_API_KEY');
+            if (!$apiKey || trim($apiKey) === '') {
                 Log::error('Stability AI API key not configured');
                 throw new \Exception('Stability AI API key belum dikonfigurasi. Silakan hubungi administrator.');
             }
 
-            // 3. Resize foto produk ke resolusi SDXL
-            $uploadedFile = $request->file('image');
-            $initImage    = $this->resizeImageForSDXL($uploadedFile->getRealPath(), $aspectRatio);
-            Log::info('Product image resized for SDXL', ['aspect_ratio' => $aspectRatio]);
+            // 3. Resize subject image ke resolusi SDXL (supaya proporsional dan tidak error)
+            $subjectPath  = $request->file('image')->getRealPath();
+            $subjectImage = $this->resizeImageForSDXL($subjectPath, $aspectRatio);
+            Log::info('Subject image resized for SDXL', ['aspect_ratio' => $aspectRatio]);
 
-            // 4. Mask: pakai upload user kalau ada, kalau tidak generate otomatis
-            if ($request->hasFile('mask')) {
-                $maskImage = $this->resizeImageForSDXL($request->file('mask')->getRealPath(), $aspectRatio);
-                Log::info('Using user-uploaded mask');
-            } else {
-                $maskImage = $this->generateSimpleCenterMask($aspectRatio);
-                Log::info('Generated automatic center mask');
-            }
+            // 4. Bangun background_prompt ala Gemini (lighting / ambiance / location)
+            $backgroundPrompt = $this->buildGeminiStyleBackgroundPrompt(
+                $lighting,
+                $ambiance,
+                $location,
+                $additional
+            );
+            Log::info('Generated background prompt', ['prompt' => $backgroundPrompt]);
 
-            // 5. Prompt background
-            $prompt = $this->buildBackgroundPrompt($lighting, $ambiance, $location, $additional);
-            Log::info('Generated prompt', ['prompt' => $prompt]);
+            // 5. Parameter untuk endpoint replace-background-and-relight
+            $params = [
+                'output_format'            => 'png',
+                'background_prompt'        => $backgroundPrompt,
+                'foreground_prompt'        => '',      // bisa diisi kalau mau styling produk
+                'negative_prompt'          => '',
+                'preserve_original_subject'=> 0.8,     // 0–1; makin tinggi makin mirip foto asli
+                'original_background_depth'=> 0.4,
+                'keep_original_background' => 'false',
+                'seed'                     => 0,
+                'light_source_strength'    => 0.3,
+                'light_source_direction'   => 'none',  // "none" / "left" / "right" / "above" / "below"
+            ];
 
-            // 6. Panggil SDXL inpainting 4x (4 variasi)
             $photoResults = [];
             $errors       = [];
 
+            // 6. Generate 4 variasi (4 request, seed beda)
             for ($i = 0; $i < 4; $i++) {
                 try {
-                    Log::info('Generating inpainting variation ' . ($i + 1));
+                    Log::info('Generating variation (replace-background) ' . ($i + 1));
+
+                    $multipartParams = $this->buildMultipartParams($params);
 
                     $response = Http::withHeaders([
-                            'Authorization' => 'Bearer ' . $stabilityApiKey,
-                            'Accept'        => 'application/json',
+                            'Authorization' => 'Bearer ' . $apiKey,
                         ])
                         ->timeout(120)
                         ->asMultipart()
-                        ->attach('init_image', $initImage, 'init.png')
-                        ->attach('mask_image', $maskImage, 'mask.png')
-                        ->post('https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image/masking', [
-                            [
-                                'name'     => 'text_prompts[0][text]',
-                                'contents' => $prompt,
-                            ],
-                            [
-                                'name'     => 'text_prompts[0][weight]',
-                                'contents' => '1',
-                            ],
-                            [
-                                'name'     => 'cfg_scale',
-                                'contents' => '7',   // background mengikuti prompt
-                            ],
-                            [
-                                'name'     => 'samples',
-                                'contents' => '1',
-                            ],
-                            [
-                                'name'     => 'steps',
-                                'contents' => '30',
-                            ],
-                            [
-                                'name'     => 'mask_source',
-                                'contents' => 'MASK_IMAGE_BLACK', // HITAM dipertahankan, PUTIH di‑paint
-                            ],
-                            [
-                                'name'     => 'style_preset',
-                                'contents' => 'photographic',
-                            ],
-                        ]);
+                        ->attach('subject_image', $subjectImage, 'subject.png')
+                        ->post(
+                            'https://api.stability.ai/v2beta/stable-image/edit/replace-background-and-relight',
+                            $multipartParams
+                        );
 
                     if ($response->successful()) {
-                        $result = $response->json();
-                        Log::info('Stability AI inpainting response successful for variation ' . ($i + 1));
+                        // Endpoint ini mengembalikan binary image langsung
+                        $binary   = $response->body();
+                        $filename = 'product-photo-' . Str::uuid() . '.png';
+                        $path     = 'ai-product-photos/' . $filename;
 
-                        if (!empty($result['artifacts'][0]['base64'] ?? null)) {
-                            $base64Image = $result['artifacts'][0]['base64'];
+                        Storage::disk('public')->put($path, $binary);
 
-                            $imageData = base64_decode($base64Image);
-                            $filename  = 'product-photo-' . Str::uuid() . '.png';
-                            $path      = 'ai-product-photos/' . $filename;
+                        $url = str_replace('http://', 'https://', url('storage/' . $path));
 
-                            Storage::disk('public')->put($path, $imageData);
-
-                            $savedImageUrl = str_replace('http://', 'https://', url('storage/' . $path));
-                            Log::info('Image saved successfully', ['path' => $savedImageUrl]);
-
-                            $photoResults[] = [
-                                'id'       => (string) Str::uuid(),
-                                'imageUrl' => $savedImageUrl,
-                            ];
-                        } else {
-                            $errorMsg = 'Stability AI error on variation ' . ($i + 1) . ' (no artifacts)';
-                            Log::error($errorMsg, [
-                                'status' => $response->status(),
-                                'body'   => $response->body(),
-                            ]);
-                            $errors[] = $errorMsg;
-                        }
+                        $photoResults[] = [
+                            'id'       => (string) Str::uuid(),
+                            'imageUrl' => $url,
+                        ];
                     } else {
-                        $errorMsg = 'Stability AI HTTP error on variation ' . ($i + 1);
-                        Log::error($errorMsg, [
+                        $errors[] = 'HTTP ' . $response->status() . ': ' . $response->body();
+                        Log::error('Stability HTTP error', [
                             'status' => $response->status(),
                             'body'   => $response->body(),
                         ]);
-                        $errors[] = $errorMsg . ': ' . $response->body();
                     }
 
+                    // Seed baru untuk variasi berikutnya
                     if ($i < 3) {
-                        sleep(2);
+                        $params['seed'] = random_int(1, 999999999);
+                        sleep(1);
                     }
                 } catch (\Exception $e) {
-                    $errorMsg = 'Error generating variation ' . ($i + 1);
-                    Log::error($errorMsg, ['error' => $e->getMessage()]);
-                    $errors[] = $errorMsg . ': ' . $e->getMessage();
+                    $errors[] = 'Error var ' . ($i + 1) . ': ' . $e->getMessage();
+                    Log::error('Error generating variation', ['error' => $e->getMessage()]);
                 }
             }
 
             if (empty($photoResults)) {
-                $errorDetails = !empty($errors) ? ' Errors: ' . implode('; ', $errors) : '';
-                throw new \Exception('Failed to generate any product photos. Please try again.' . $errorDetails);
+                throw new \Exception('Gagal generate foto produk. ' . implode(' | ', $errors));
             }
 
             return response()->json([
                 'success' => true,
-                'message' => 'Product photos generated successfully (inpainting)',
+                'message' => 'Product photos generated successfully (replace background)',
                 'data'    => $photoResults,
                 'errors'  => $errors,
             ]);
         } catch (\Exception $e) {
-            Log::error('Product photo inpainting error:', [
+            Log::error('Product photo generation error:', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -181,101 +149,70 @@ class AIProductPhotoController extends Controller
     }
 
     /**
-     * Prompt khusus background – produk sudah dilindungi mask.
+     * Bangun background_prompt dengan gaya pilihan ala Gemini.
      */
-    private function buildBackgroundPrompt(
+    private function buildGeminiStyleBackgroundPrompt(
         string $lighting,
         string $ambiance,
         string $location,
-        string $additionalInstructions
+        string $additional
     ): string {
-        $lightingDescriptions = [
-            'light' => 'bright natural daylight, soft shadows, fresh atmosphere',
-            'dark'  => 'dramatic moody lighting, dark background, cinematic look',
+        $lightingMap = [
+            'light' => 'pencahayaan daylight yang cerah, soft shadow, tampak segar',
+            'dark'  => 'pencahayaan dramatis, kontras tinggi, mood sinematik',
         ];
 
-        $ambianceDescriptions = [
-            'clean' => 'clean minimalist studio background, simple elegant backdrop, professional product photography',
-            'crowd' => 'lifestyle setting with natural props, contextual environment, real-world scene',
+        $ambianceMap = [
+            'clean' => 'background studio minimalis, bersih, polos, fokus ke produk',
+            'crowd' => 'setting lifestyle dengan lingkungan sekitar yang relevan, terasa nyata',
         ];
 
-        $locationDescriptions = [
-            'indoor'  => 'indoor interior setting, cozy room',
-            'outdoor' => 'outdoor natural environment, open air',
+        $locationMap = [
+            'indoor'  => 'interior ruangan yang cozy dan modern',
+            'outdoor' => 'lingkungan luar ruangan dengan elemen alam atau taman atau kota',
         ];
 
-        $lightingDesc  = $lightingDescriptions[$lighting] ?? 'bright natural daylight';
-        $ambianceDesc  = $ambianceDescriptions[$ambiance] ?? 'clean minimalist studio background';
+        $lightingDesc = $lightingMap[$lighting] ?? $lightingMap['light'];
+        $ambianceDesc = $ambianceMap[$ambiance] ?? $ambianceMap['clean'];
 
-        $prompt = "Create a new professional background and environment for commercial product photography. "
-                . "Do not alter or redraw the product inside the masked area at all. "
-                . "Add natural surface and soft realistic shadows under the product so it looks grounded. "
-                . "{$lightingDesc}, {$ambianceDesc}";
+        $prompt = "Foto produk komersial profesional dengan latar baru. "
+            . "Fokus utama tetap pada produk di tengah gambar, tajam dan jelas. "
+            . "{$lightingDesc}, {$ambianceDesc}";
 
         if ($ambiance === 'crowd') {
-            $locationDesc = $locationDescriptions[$location] ?? 'indoor interior setting';
+            $locationDesc = $locationMap[$location] ?? $locationMap['indoor'];
             $prompt      .= ", {$locationDesc}";
         }
 
-        if (!empty($additionalInstructions)) {
-            $prompt .= ", {$additionalInstructions}";
+        if (!empty($additional)) {
+            $prompt .= ", {$additional}";
         }
 
-        $prompt .= ", depth of field, softly blurred background, realistic, high resolution, 8K commercial photoshoot";
+        $prompt .= ", komposisi rapi, depth of field, background sedikit blur, resolusi tinggi, kualitas iklan profesional";
 
         return $prompt;
     }
 
     /**
-     * Generate mask sederhana:
-     * - HITAM (center) = produk (dipertahankan)
-     * - PUTIH (edges)  = background (akan digambar ulang)
+     * Ubah array params menjadi format multipart untuk Http::asMultipart().
      */
-    private function generateSimpleCenterMask(string $aspectRatio): string
+    private function buildMultipartParams(array $params): array
     {
-        $dimensionsMap = [
-            '1:1'  => [1024, 1024],
-            '3:4'  => [896, 1152],
-            '16:9' => [1344, 768],
-            '9:16' => [768, 1344],
-        ];
-
-        $dimensions = $dimensionsMap[$aspectRatio] ?? [1024, 1024];
-        [$width, $height] = $dimensions;
-
-        $mask = imagecreatetruecolor($width, $height);
-
-        // PUTIH = background (di‑paint)
-        $white = imagecolorallocate($mask, 255, 255, 255);
-        imagefilledrectangle($mask, 0, 0, $width, $height, $white);
-
-        // HITAM = produk (dilindungi)
-        $black   = imagecolorallocate($mask, 0, 0, 0);
-        $centerX = (int) ($width / 2);
-        $centerY = (int) ($height / 2);
-
-        // Persegi tengah – bisa disesuaikan kalau produkmu tinggi/rendah
-        $rectWidth  = (int) ($width * 0.40);
-        $rectHeight = (int) ($height * 0.65);
-
-        $x1 = $centerX - (int) ($rectWidth / 2);
-        $y1 = $centerY - (int) ($rectHeight / 2);
-        $x2 = $centerX + (int) ($rectWidth / 2);
-        $y2 = $centerY + (int) ($rectHeight / 2);
-
-        imagefilledrectangle($mask, $x1, $y1, $x2, $y2, $black);
-
-        ob_start();
-        imagepng($mask, null, 9);
-        $maskContent = ob_get_clean();
-
-        imagedestroy($mask);
-
-        return $maskContent;
+        $multipart = [];
+        foreach ($params as $key => $value) {
+            if (is_bool($value)) {
+                $value = $value ? 'true' : 'false';
+            }
+            $multipart[] = [
+                'name'     => $key,
+                'contents' => (string) $value,
+            ];
+        }
+        return $multipart;
     }
 
     /**
-     * Resize image ke dimensi SDXL sesuai aspect ratio.
+     * Resize image ke dimensi kompatibel SDXL berdasarkan aspect ratio.
      */
     private function resizeImageForSDXL(string $imagePath, string $aspectRatio): string
     {
@@ -361,13 +298,13 @@ class AIProductPhotoController extends Controller
     }
 
     /**
-     * Test endpoint.
+     * Endpoint test.
      */
     public function testEndpoint(): JsonResponse
     {
         return response()->json([
             'success'              => true,
-            'message'              => 'AI Product Photo Controller (Inpainting) is working',
+            'message'              => 'AI Product Photo Controller (Replace Background) is working',
             'php_version'          => PHP_VERSION,
             'stability_configured' => !empty(env('STABILITY_API_KEY')),
             'gd_enabled'           => extension_loaded('gd'),
