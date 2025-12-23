@@ -14,7 +14,7 @@ class AIProductPhotoController extends Controller
     /**
      * Generate AI product photos using Stability AI SDXL (image-to-image).
      */
-    public function generate(Request $request): JsonResponse
+    public function generateProductPhoto(Request $request): JsonResponse
     {
         try {
             // 1. Validasi input
@@ -154,6 +154,7 @@ class AIProductPhotoController extends Controller
                 }
             }
 
+            // Check if any photos were generated successfully
             if (empty($photoResults)) {
                 $errorDetails = !empty($errors) ? ' Errors: ' . implode('; ', $errors) : '';
                 throw new \Exception('Failed to generate any product photos. Please try again.' . $errorDetails);
