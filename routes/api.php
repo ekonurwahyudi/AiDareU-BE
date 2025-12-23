@@ -441,6 +441,6 @@ Route::middleware(['auth:sanctum,web'])->group(function () {
         // AI Product Photo Routes
         Route::get('/product-photo/test', [AIProductPhotoController::class, 'testEndpoint']);
         Route::post('/generate-product-photo', [AIProductPhotoController::class, 'generateProductPhoto']);
-        Route::get('/product-photo/download/{filename}', [AIProductPhotoController::class, 'downloadProductPhoto']);
+        // Note: Download uses direct storage URL (/storage/ai-product-photos/...) - no endpoint needed
     });
 });

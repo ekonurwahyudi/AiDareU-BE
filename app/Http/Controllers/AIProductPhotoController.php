@@ -110,14 +110,22 @@ class AIProductPhotoController extends Controller
                             $compressedContent = $this->compressImage($imageContent);
                             Storage::disk('public')->put($compressedPath, $compressedContent);
 
-                            $savedUrl = str_replace('http://', 'https://', url('storage/' . $compressedPath));
-                            $originalUrl = str_replace('http://', 'https://', url('storage/' . $path));
+                            // URLs for display (compressed) and download (original)
+                            $displayUrl = str_replace('http://', 'https://', url('storage/' . $compressedPath));
+                            $downloadUrl = str_replace('http://', 'https://', url('storage/' . $path));
+
+                            Log::info('Product photo URLs generated', [
+                                'display' => $displayUrl,
+                                'download' => $downloadUrl,
+                                'filename' => $filename
+                            ]);
 
                             $photoResults[] = [
-                                'id'       => (string) Str::uuid(),
-                                'imageUrl' => $savedUrl, // Compressed for display
-                                'originalUrl' => $originalUrl, // Original for download
-                                'filename' => $filename, // Original filename for download
+                                'id' => (string) Str::uuid(),
+                                'imageUrl' => $displayUrl, // Compressed untuk tampilan cepat
+                                'downloadUrl' => $downloadUrl, // Original untuk download
+                                'filename' => $filename,
+                                'prompt' => $prompt
                             ];
                         } else {
                             $errorMsg = 'fal.ai error on variation ' . ($i + 1) . ' (no images in response)';
@@ -395,44 +403,6 @@ class AIProductPhotoController extends Controller
         } catch (\Exception $e) {
             Log::error('Error compressing image: ' . $e->getMessage());
             return $imageContent; // Return original if compression fails
-        }
-    }
-
-    /**
-     * Download product photo file
-     */
-    public function downloadProductPhoto(string $filename)
-    {
-        try {
-            $path = 'ai-product-photos/' . $filename;
-
-            // Check if file exists
-            if (!Storage::disk('public')->exists($path)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Product photo file not found'
-                ], 404);
-            }
-
-            // Get file contents
-            $file = Storage::disk('public')->get($path);
-
-            // Return file as download
-            // Note: CORS headers are automatically added by Laravel CORS middleware
-            return response($file, 200)
-                ->header('Content-Type', 'image/png')
-                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
-
-        } catch (\Exception $e) {
-            Log::error('Product photo download error:', [
-                'filename' => $filename,
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to download product photo: ' . $e->getMessage()
-            ], 500);
         }
     }
 
