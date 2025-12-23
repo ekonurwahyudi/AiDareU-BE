@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 class AIController extends Controller
 {
     /**
-     * Generate logo using OpenAI DALL-E
+     * Generate logo using Stability AI SDXL 1.0
      */
     public function generateLogo(Request $request): JsonResponse
     {
@@ -47,80 +47,88 @@ class AIController extends Controller
 
             Log::info('Generating logo with prompt:', ['prompt' => $fullPrompt]);
 
-            // Get OpenAI API key
-            $apiKey = env('OPENAI_API_KEY');
+            // Get Stability AI API key
+            $apiKey = env('STABILITY_API_KEY');
             if (!$apiKey || empty(trim($apiKey))) {
-                Log::error('OpenAI API key not configured');
-                throw new \Exception('OpenAI API key belum dikonfigurasi. Silakan hubungi administrator.');
+                Log::error('Stability AI API key not configured');
+                throw new \Exception('Stability AI API key belum dikonfigurasi. Silakan hubungi administrator.');
             }
 
-            // Generate 4 logo variations
+            // Generate 2 logo variations
             $logoResults = [];
             $errors = [];
 
-            for ($i = 0; $i < 4; $i++) {
+            for ($i = 0; $i < 2; $i++) {
                 try {
                     // Add variation to prompt
                     $variationPrompt = $fullPrompt . " Variation " . ($i + 1) . ".";
 
                     Log::info("Generating logo variation " . ($i + 1), ['prompt' => $variationPrompt]);
 
-                    // Call OpenAI DALL-E API
-                    // Note: DALL-E 3 only supports square images, we'll process them after
+                    // Call Stability AI SDXL 1.0 Image-to-Image API
                     $response = Http::withHeaders([
                         'Authorization' => 'Bearer ' . $apiKey,
-                        'Content-Type' => 'application/json',
-                    ])->timeout(60)->post('https://api.openai.com/v1/images/generations', [
-                        'model' => 'dall-e-3',
-                        'prompt' => $variationPrompt,
-                        'n' => 1,
-                        'size' => '1024x1024',
-                        'quality' => 'standard',
-                        'response_format' => 'url'
+                        'Accept' => 'application/json',
+                    ])->timeout(60)->attach(
+                        'image', $this->createBlankImage(), 'blank.png'
+                    )->post('https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image', [
+                        'text_prompts[0][text]' => $variationPrompt,
+                        'text_prompts[0][weight]' => 1,
+                        'cfg_scale' => 7,
+                        'image_strength' => 0.35,
+                        'samples' => 1,
+                        'steps' => 30,
                     ]);
 
                     if ($response->successful()) {
                         $result = $response->json();
-                        $imageUrl = $result['data'][0]['url'] ?? null;
+                        
+                        Log::info("Stability AI response successful", ['result' => $result]);
 
-                        Log::info("OpenAI response successful", ['has_url' => !is_null($imageUrl)]);
-
-                        if ($imageUrl) {
-                            try {
-                                // Download the image
-                                $imageContent = file_get_contents($imageUrl);
-
-                                $filename = 'logo-' . Str::uuid() . '.png';
-                                $path = 'ai-logos/' . $filename;
-
-                                // Try to process image with transparency, fallback to original if fails
+                        if (isset($result['artifacts']) && is_array($result['artifacts']) && count($result['artifacts']) > 0) {
+                            $imageBase64 = $result['artifacts'][0]['base64'] ?? null;
+                            
+                            if ($imageBase64) {
                                 try {
-                                    Log::info("Starting background removal process");
-                                    $processedImage = $this->removeWhiteBackground($imageContent);
-                                    Storage::disk('public')->put($path, $processedImage);
-                                    Log::info("Background removed successfully");
-                                } catch (\Exception $processingError) {
-                                    Log::warning("Background removal failed, saving original: " . $processingError->getMessage());
-                                    Storage::disk('public')->put($path, $imageContent);
+                                    // Decode base64 image
+                                    $imageContent = base64_decode($imageBase64);
+
+                                    $filename = 'logo-' . Str::uuid() . '.png';
+                                    $path = 'ai-logos/' . $filename;
+
+                                    // Try to process image with transparency, fallback to original if fails
+                                    try {
+                                        Log::info("Starting background removal process");
+                                        $processedImage = $this->removeWhiteBackground($imageContent);
+                                        Storage::disk('public')->put($path, $processedImage);
+                                        Log::info("Background removed successfully");
+                                    } catch (\Exception $processingError) {
+                                        Log::warning("Background removal failed, saving original: " . $processingError->getMessage());
+                                        Storage::disk('public')->put($path, $imageContent);
+                                    }
+
+                                    // Get full URL for the saved image (force HTTPS for production)
+                                    $savedImageUrl = str_replace('http://', 'https://', url('storage/' . $path));
+
+                                    Log::info("Image saved successfully", ['path' => $savedImageUrl]);
+
+                                    $logoResults[] = [
+                                        'id' => Str::uuid(),
+                                        'imageUrl' => $savedImageUrl,
+                                        'filename' => $filename, // Add filename for download endpoint
+                                        'prompt' => $variationPrompt
+                                    ];
+                                } catch (\Exception $e) {
+                                    Log::error("Error processing/saving image: " . $e->getMessage());
+                                    $errors[] = "Error saving image for variation " . ($i + 1) . ": " . $e->getMessage();
                                 }
-
-                                // Get full URL for the saved image (force HTTPS for production)
-                                $savedImageUrl = str_replace('http://', 'https://', url('storage/' . $path));
-
-                                Log::info("Image saved successfully", ['path' => $savedImageUrl]);
-
-                                $logoResults[] = [
-                                    'id' => Str::uuid(),
-                                    'imageUrl' => $savedImageUrl,
-                                    'prompt' => $variationPrompt
-                                ];
-                            } catch (\Exception $e) {
-                                Log::error("Error downloading/saving image: " . $e->getMessage());
-                                $errors[] = "Error saving image for variation " . ($i + 1) . ": " . $e->getMessage();
                             }
+                        } else {
+                            Log::error("No artifacts in Stability AI response", ['response' => $result]);
+                            $errors[] = "No image generated for variation " . ($i + 1);
                         }
                     } else {
-                        $errorMsg = 'OpenAI API error on variation ' . ($i + 1);
+                        $errorMsg = 'Stability AI API error on variation ' . ($i + 1);
                         Log::error($errorMsg, [
                             'status' => $response->status(),
                             'body' => $response->body()
@@ -129,7 +137,7 @@ class AIController extends Controller
                     }
 
                     // Add small delay between requests
-                    if ($i < 3) {
+                    if ($i < 1) {
                         sleep(1);
                     }
                 } catch (\Exception $e) {
@@ -162,6 +170,26 @@ class AIController extends Controller
                 'message' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Create a blank white image for Stability AI image-to-image
+     */
+    private function createBlankImage(): string
+    {
+        // Create a 1024x1024 white image
+        $image = imagecreatetruecolor(1024, 1024);
+        $white = imagecolorallocate($image, 255, 255, 255);
+        imagefill($image, 0, 0, $white);
+        
+        ob_start();
+        imagepng($image);
+        $imageContent = ob_get_contents();
+        ob_end_clean();
+        
+        imagedestroy($image);
+        
+        return $imageContent;
     }
 
     /**
@@ -351,7 +379,7 @@ class AIController extends Controller
     }
 
     /**
-     * Download logo file
+     * Download logo file via proxy to avoid CORS
      */
     public function downloadLogo(string $filename)
     {
@@ -369,11 +397,13 @@ class AIController extends Controller
             // Get file contents
             $file = Storage::disk('public')->get($path);
 
-            // Return file as download
-            // Note: CORS headers are automatically added by Laravel CORS middleware
+            // Return file as download with proper headers
             return response($file, 200)
                 ->header('Content-Type', 'image/png')
-                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"')
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
 
         } catch (\Exception $e) {
             Log::error('Logo download error:', [
@@ -395,10 +425,11 @@ class AIController extends Controller
     {
         return response()->json([
             'success' => true,
-            'message' => 'AI Controller is working',
+            'message' => 'AI Controller is working (Stability AI)',
             'gd_available' => extension_loaded('gd'),
             'php_version' => PHP_VERSION,
-            'memory_limit' => ini_get('memory_limit')
+            'memory_limit' => ini_get('memory_limit'),
+            'stability_configured' => !empty(env('STABILITY_API_KEY'))
         ]);
     }
 

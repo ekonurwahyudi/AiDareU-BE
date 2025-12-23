@@ -69,8 +69,8 @@ class AIProductPhotoController extends Controller
             $photoResults = [];
             $errors       = [];
 
-            // 6. Generate 4 variasi menggunakan nano-banana edit
-            for ($i = 0; $i < 4; $i++) {
+            // 6. Generate 2 variasi menggunakan nano-banana edit
+            for ($i = 0; $i < 2; $i++) {
                 try {
                     Log::info('Generating variation (nano-banana) ' . ($i + 1));
 
@@ -133,7 +133,7 @@ class AIProductPhotoController extends Controller
                     }
 
                     // Small delay between requests
-                    if ($i < 3) {
+                    if ($i < 1) {
                         sleep(2);
                     }
                 } catch (\Exception $e) {
@@ -395,6 +395,46 @@ class AIProductPhotoController extends Controller
         } catch (\Exception $e) {
             Log::error('Error compressing image: ' . $e->getMessage());
             return $imageContent; // Return original if compression fails
+        }
+    }
+
+    /**
+     * Download product photo file via proxy to avoid CORS
+     */
+    public function downloadProductPhoto(string $filename)
+    {
+        try {
+            $path = 'ai-product-photos/' . $filename;
+
+            // Check if file exists
+            if (!Storage::disk('public')->exists($path)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Product photo file not found'
+                ], 404);
+            }
+
+            // Get file contents
+            $file = Storage::disk('public')->get($path);
+
+            // Return file as download with proper headers
+            return response($file, 200)
+                ->header('Content-Type', 'image/png')
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"')
+                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Methods', 'GET')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
+
+        } catch (\Exception $e) {
+            Log::error('Product photo download error:', [
+                'filename' => $filename,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to download product photo: ' . $e->getMessage()
+            ], 500);
         }
     }
 
