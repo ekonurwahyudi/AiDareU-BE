@@ -49,9 +49,10 @@ class AIProductPhotoController extends Controller
             $prompt = $this->buildPrompt($lighting, $ambiance, $location, $additionalInstructions);
             Log::info('Generated prompt:', ['prompt' => $prompt]);
 
-            // Step 2: Prepare the uploaded image
+            // Step 2: Prepare and resize the uploaded image to SDXL compatible dimensions
             $uploadedFile = $request->file('image');
-            $imageContent = file_get_contents($uploadedFile->getRealPath());
+            $imageContent = $this->resizeImageForSDXL($uploadedFile->getRealPath(), $aspectRatio);
+            Log::info('Image resized for SDXL', ['aspect_ratio' => $aspectRatio]);
 
             // Step 3: Generate 4 variations using Stability AI
             $photoResults = [];
@@ -217,6 +218,100 @@ class AIProductPhotoController extends Controller
     }
 
     /**
+     * Resize image to SDXL compatible dimensions based on aspect ratio
+     */
+    private function resizeImageForSDXL(string $imagePath, string $aspectRatio): string
+    {
+        // SDXL allowed dimensions mapped by aspect ratio
+        $dimensionsMap = [
+            '1:1' => [1024, 1024],
+            '3:4' => [896, 1152],   // portrait
+            '16:9' => [1344, 768],  // landscape
+            '9:16' => [768, 1344],  // portrait
+        ];
+
+        $dimensions = $dimensionsMap[$aspectRatio] ?? [1024, 1024];
+        $targetWidth = $dimensions[0];
+        $targetHeight = $dimensions[1];
+
+        // Create image from file
+        $imageInfo = getimagesize($imagePath);
+        $mimeType = $imageInfo['mime'];
+
+        switch ($mimeType) {
+            case 'image/jpeg':
+                $sourceImage = imagecreatefromjpeg($imagePath);
+                break;
+            case 'image/png':
+                $sourceImage = imagecreatefrompng($imagePath);
+                break;
+            case 'image/webp':
+                $sourceImage = imagecreatefromwebp($imagePath);
+                break;
+            default:
+                throw new \Exception('Unsupported image format. Please use JPG, PNG, or WEBP.');
+        }
+
+        // Create new image with target dimensions
+        $resizedImage = imagecreatetruecolor($targetWidth, $targetHeight);
+
+        // Preserve transparency for PNG
+        if ($mimeType === 'image/png') {
+            imagealphablending($resizedImage, false);
+            imagesavealpha($resizedImage, true);
+            $transparent = imagecolorallocatealpha($resizedImage, 255, 255, 255, 127);
+            imagefilledrectangle($resizedImage, 0, 0, $targetWidth, $targetHeight, $transparent);
+        }
+
+        // Get source dimensions
+        $sourceWidth = imagesx($sourceImage);
+        $sourceHeight = imagesy($sourceImage);
+
+        // Calculate scaling to fit (cover mode - maintain aspect ratio and crop if needed)
+        $sourceAspect = $sourceWidth / $sourceHeight;
+        $targetAspect = $targetWidth / $targetHeight;
+
+        if ($sourceAspect > $targetAspect) {
+            // Source is wider - fit to height
+            $scaledHeight = $targetHeight;
+            $scaledWidth = (int)($targetHeight * $sourceAspect);
+            $offsetX = (int)(($targetWidth - $scaledWidth) / 2);
+            $offsetY = 0;
+        } else {
+            // Source is taller - fit to width
+            $scaledWidth = $targetWidth;
+            $scaledHeight = (int)($targetWidth / $sourceAspect);
+            $offsetX = 0;
+            $offsetY = (int)(($targetHeight - $scaledHeight) / 2);
+        }
+
+        // Copy and resize
+        imagecopyresampled(
+            $resizedImage,
+            $sourceImage,
+            $offsetX,
+            $offsetY,
+            0,
+            0,
+            $scaledWidth,
+            $scaledHeight,
+            $sourceWidth,
+            $sourceHeight
+        );
+
+        // Save to buffer
+        ob_start();
+        imagepng($resizedImage, null, 9);
+        $imageContent = ob_get_clean();
+
+        // Clean up
+        imagedestroy($sourceImage);
+        imagedestroy($resizedImage);
+
+        return $imageContent;
+    }
+
+    /**
      * Test endpoint to check if controller is working
      */
     public function testEndpoint(): JsonResponse
@@ -225,7 +320,8 @@ class AIProductPhotoController extends Controller
             'success' => true,
             'message' => 'AI Product Photo Controller is working (Stability AI)',
             'php_version' => PHP_VERSION,
-            'stability_configured' => !empty(env('STABILITY_API_KEY'))
+            'stability_configured' => !empty(env('STABILITY_API_KEY')),
+            'gd_enabled' => extension_loaded('gd')
         ]);
     }
 }
