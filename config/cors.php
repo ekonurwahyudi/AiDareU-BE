@@ -1,8 +1,8 @@
 <?php
 
 return [
-    // Apply CORS for API routes and Sanctum CSRF endpoint
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    // Apply CORS for API routes, Sanctum CSRF endpoint, and storage files
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'storage/*'],
 
     // Methods allowed
     'allowed_methods' => ['*'],

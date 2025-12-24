@@ -49,10 +49,6 @@ $storageHandler = function ($path) {
             'Content-Type' => $mimeType,
             'Content-Length' => $fileSize,
             'Cache-Control' => 'public, max-age=86400', // Cache for 24 hours
-            'Access-Control-Allow-Origin' => '*', // Allow CORS for images
-            'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
-            'Access-Control-Allow-Headers' => 'Content-Type, Accept, Authorization, X-Requested-With',
-            'Access-Control-Expose-Headers' => 'Content-Length, Content-Type',
             'X-Content-Type-Options' => 'nosniff',
         ]);
     } catch (\Exception $e) {
@@ -68,17 +64,8 @@ $storageHandler = function ($path) {
 // PRIORITY 1: Storage route - MUST be registered BEFORE any catch-all routes
 // Works on ALL domains (main domain, subdomains, custom domains)
 // Accessible at: https://api.aidareu.com/storage/{path}
+// CORS is handled by HandleCors middleware via config/cors.php
 Route::get('/storage/{path}', $storageHandler)->where('path', '.*');
-
-// OPTIONS handler for CORS preflight on storage routes
-Route::options('/storage/{path}', function () {
-    return response('', 200, [
-        'Access-Control-Allow-Origin' => '*',
-        'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
-        'Access-Control-Allow-Headers' => 'Content-Type, Accept, Authorization, X-Requested-With',
-        'Access-Control-Max-Age' => '86400',
-    ]);
-})->where('path', '.*');
 
 // Main domain routes (when no subdomain/custom domain)
 Route::domain(config('app.domain', 'localhost'))->group(function () use ($storageHandler) {
