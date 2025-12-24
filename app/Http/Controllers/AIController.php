@@ -87,7 +87,7 @@ class AIController extends Controller
                         'width' => 1024,
                         'samples' => 1,
                         'steps' => 40,
-                        'style_preset' => 'line-art',
+                        'style_preset' => 'digital-art',
                     ]);
 
                     if ($response->successful()) {
