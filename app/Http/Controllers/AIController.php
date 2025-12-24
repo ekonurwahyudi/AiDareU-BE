@@ -78,8 +78,8 @@ class AIController extends Controller
                                 'weight' => 1
                             ],
                             [
-                                'text'   => 'blurry, low quality, distorted, watermark, signature, photo, realistic, 3d render, mockup, background objects, poster, flyer, business card, multiple logos, logo grid, pattern',
-                                'weight' => -1
+                                'text'   => 'blurry, low quality, distorted, watermark, signature, photo, realistic, 3d render, mockup, background objects, poster, flyer, business card, multiple logos, logo grid, pattern, illegible text, messy text, random letters',
+                                'weight' => -1,
                             ]
                         ],
                         'cfg_scale' => 8,
@@ -342,27 +342,31 @@ class AIController extends Controller
     private function buildEnhancedLogoPrompt(string $businessName, string $userPrompt, string $style): string
 {
     $styleDescriptions = [
-        'modern'      => 'modern, clean, minimalist',
-        'simple'      => 'simple, minimal, clean lines',
-        'creative'    => 'creative, unique, artistic',
-        'minimalist'  => 'minimalist, simple shapes, clean',
-        'professional'=> 'professional, corporate, elegant',
-        'playful'     => 'playful, fun, friendly',
-        'elegant'     => 'elegant, sophisticated, refined',
-        'bold'        => 'bold, strong, impactful',
+        'modern'       => 'modern, clean, friendly',
+        'simple'       => 'simple, minimal, clean lines',
+        'creative'     => 'creative, unique, playful',
+        'minimalist'   => 'minimalist, simple shapes, clean',
+        'professional' => 'professional, corporate, trustworthy',
+        'playful'      => 'playful, fun, rounded shapes',
+        'elegant'      => 'elegant, refined, balanced',
+        'bold'         => 'bold, strong, impactful',
     ];
-    $styleDesc = $styleDescriptions[$style] ?? 'modern, clean, minimalist';
+    $styleDesc = $styleDescriptions[$style] ?? 'modern, clean, friendly';
 
     return "Flat 2D {$styleDesc} logo for a digital brand named '{$businessName}'. "
-        ."Create ONE simple, original icon and the brand name '{$businessName}' as clean text. "
-        ."Layout: icon on the left and text on the right, OR icon on top and text below it. "
-        ."No frames, no boxes, no extra symbols, no pattern tiles. "
-        ."Pure logo on a solid background, centered composition, high contrast, vector-style, "
-        ."suitable for app icon and website header. "
-        ."Business concept: {$userPrompt}. "
-        ."Do NOT create multiple small logo options in one image, do NOT draw mockups, "
-        ."do NOT add packaging, posters, cards, or photos; only the logo itself.";
+        ."Create ONE colorful icon on the left and the brand name '{$businessName}' on the right, "
+        ."similar to modern app logos: simple geometric icon + rounded wordmark. "
+        ."Use 2–3 harmonious colors, with a main brand color that stands out (for example a fresh green or warm color), "
+        ."clean vector shapes, soft rounded corners, no gradients, no textures. "
+        ."Typography: rounded sans-serif letters, very clear and legible. "
+        ."Do not add any extra text besides '{$businessName}'. "
+        ."Background: solid light color (almost white), no patterns, no photos. "
+        ."Do NOT create mockups, posters, business cards, packaging, phones, or multiple logo options in one image, "
+        ."no frames, no logo grid, just a single logo mark centered in the canvas. "
+        ."Business concept: {$userPrompt}.";
 }
+
+
 
 
     /**
