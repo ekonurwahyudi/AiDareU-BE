@@ -78,16 +78,16 @@ class AIController extends Controller
                                 'weight' => 1
                             ],
                             [
-                                'text' => 'blurry, low quality, distorted, watermark, signature, photo, realistic, 3d render, mockup, background objects',
+                                'text'   => 'blurry, low quality, distorted, watermark, signature, photo, realistic, 3d render, mockup, background objects, poster, flyer, business card, multiple logos, logo grid, pattern',
                                 'weight' => -1
                             ]
                         ],
                         'cfg_scale' => 8,
                         'height' => 1024,
-                        'width' => 1024,
+                        'width' => 768,
                         'samples' => 1,
                         'steps' => 40,
-                        'style_preset' => 'digital-art',
+                        'style_preset' => 'logo',
                     ]);
 
                     if ($response->successful()) {
@@ -340,29 +340,30 @@ class AIController extends Controller
      * Build enhanced prompt for better logo generation with text
      */
     private function buildEnhancedLogoPrompt(string $businessName, string $userPrompt, string $style): string
-    {
-        $styleDescriptions = [
-            'modern'      => 'modern, clean, minimalist',
-            'simple'      => 'simple, minimal, clean lines',
-            'creative'    => 'creative, unique, artistic',
-            'minimalist'  => 'minimalist, simple shapes, clean',
-            'professional'=> 'professional, corporate, elegant',
-            'playful'     => 'playful, fun, friendly',
-            'elegant'     => 'elegant, sophisticated, refined',
-            'bold'        => 'bold, strong, impactful',
-        ];
+{
+    $styleDescriptions = [
+        'modern'      => 'modern, clean, minimalist',
+        'simple'      => 'simple, minimal, clean lines',
+        'creative'    => 'creative, unique, artistic',
+        'minimalist'  => 'minimalist, simple shapes, clean',
+        'professional'=> 'professional, corporate, elegant',
+        'playful'     => 'playful, fun, friendly',
+        'elegant'     => 'elegant, sophisticated, refined',
+        'bold'        => 'bold, strong, impactful',
+    ];
+    $styleDesc = $styleDescriptions[$style] ?? 'modern, clean, minimalist';
 
-        $styleDesc = $styleDescriptions[$style] ?? 'modern, clean, minimalist';
+    return "Flat 2D {$styleDesc} logo for a digital brand named '{$businessName}'. "
+        ."Create ONE simple, original icon and the brand name '{$businessName}' as clean text. "
+        ."Layout: icon on the left and text on the right, OR icon on top and text below it. "
+        ."No frames, no boxes, no extra symbols, no pattern tiles. "
+        ."Pure logo on a solid background, centered composition, high contrast, vector-style, "
+        ."suitable for app icon and website header. "
+        ."Business concept: {$userPrompt}. "
+        ."Do NOT create multiple small logo options in one image, do NOT draw mockups, "
+        ."do NOT add packaging, posters, cards, or photos; only the logo itself.";
+}
 
-        // Enhanced prompt for Stability AI
-        return "Professional logo design, {$styleDesc} style. "
-            . "Logo text: '{$businessName}'. "
-            . "Concept: {$userPrompt}. "
-            . "Flat vector style, simple icon with text, clean typography, "
-            . "white background, centered composition, high contrast, "
-            . "professional branding, corporate identity, "
-            . "no mockups, no 3D, no photos, pure logo design";
-    }
 
     /**
      * Build enhanced prompt for logo generation (legacy - kept for compatibility)
