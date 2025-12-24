@@ -137,7 +137,7 @@ class AIMergePhotoController extends Controller
 
     /**
      * Generate instruction suggestion based on uploaded images
-     * Returns a default creative instruction since vision analysis may not be available
+     * For now returns creative suggestions - can be enhanced with vision model later
      */
     public function generateInstruction(Request $request): JsonResponse
     {
@@ -149,33 +149,18 @@ class AIMergePhotoController extends Controller
 
             $imageCount = count($request->file('images'));
             
-            // Generate creative instruction suggestions based on image count
+            // Creative suggestions based on common use cases
             $suggestions = [
-                2 => [
-                    'Gabungkan kedua gambar ini menjadi satu komposisi yang harmonis, dengan transisi yang halus antara elemen-elemen utama.',
-                    'Kombinasikan subjek dari foto pertama dengan latar belakang foto kedua secara natural.',
-                    'Buat kolase kreatif yang menggabungkan elemen terbaik dari kedua foto dengan pencahayaan yang konsisten.',
-                    'Satukan kedua gambar dengan blending yang smooth, pertahankan detail penting dari masing-masing foto.',
-                ],
-                3 => [
-                    'Gabungkan ketiga gambar ini menjadi satu panorama atau kolase yang menarik dengan transisi seamless.',
-                    'Kombinasikan elemen utama dari setiap foto menjadi satu komposisi yang kohesif dan profesional.',
-                    'Buat montase kreatif dari ketiga foto dengan pencahayaan dan warna yang seragam.',
-                ],
-                4 => [
-                    'Susun keempat gambar menjadi grid atau kolase artistik dengan tema yang konsisten.',
-                    'Gabungkan elemen-elemen penting dari setiap foto menjadi satu karya visual yang menarik.',
-                    'Buat komposisi kreatif yang menggabungkan keempat foto dengan transisi yang halus.',
-                ],
-                5 => [
-                    'Kombinasikan kelima gambar menjadi satu montase atau kolase yang eye-catching.',
-                    'Gabungkan semua elemen dari foto-foto ini menjadi satu komposisi panoramik yang menakjubkan.',
-                    'Buat karya visual yang menggabungkan kelima foto dengan tema dan warna yang harmonis.',
-                ],
+                'Gabungkan orang di foto pertama dengan produk di foto lainnya, buat seolah orang tersebut sedang memegang atau menggunakan produk.',
+                'Kombinasikan model/orang dengan background dari foto lain untuk membuat foto promosi yang menarik.',
+                'Gabungkan beberapa produk menjadi satu foto katalog dengan layout yang rapi dan profesional.',
+                'Buat foto before-after dengan menggabungkan kedua gambar secara side by side atau overlay.',
+                'Kombinasikan elemen-elemen dari setiap foto menjadi satu komposisi kreatif untuk konten sosial media.',
+                'Gabungkan foto produk dengan lifestyle scene untuk membuat foto iklan yang menarik.',
+                'Buat montase foto yang menggabungkan semua gambar dengan transisi yang halus dan artistik.',
             ];
-
-            $availableSuggestions = $suggestions[$imageCount] ?? $suggestions[2];
-            $randomInstruction = $availableSuggestions[array_rand($availableSuggestions)];
+            
+            $randomInstruction = $suggestions[array_rand($suggestions)];
 
             return response()->json([
                 'success' => true,
