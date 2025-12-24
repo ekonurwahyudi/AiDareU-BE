@@ -83,7 +83,7 @@ class AIController extends Controller
                             ]
                         ],
                         'cfg_scale' => 8,
-                        'height' => 768,
+                        'height' => 1024,
                         'width' => 1024,
                         'samples' => 1,
                         'steps' => 40,
