@@ -418,6 +418,11 @@ Route::get('/theme-settings', [SettingTokoController::class, 'index']);
 // Public: Get store by subdomain with all data
 Route::get('/store/{subdomain}', [SettingTokoController::class, 'getStoreBySubdomain']);
 
+// Public: AI Download Routes (no auth required - files are already public in storage)
+// These must be outside auth middleware to avoid CORS preflight issues
+Route::get('/ai/logo/download/{filename}', [AIController::class, 'downloadLogo']);
+Route::get('/ai/product-photo/download/{filename}', [AIProductPhotoController::class, 'downloadProductPhoto']);
+
 // Protected: Theme Settings Management
 // NOTE: OPTIONS preflight requests are handled by ForceJsonResponse middleware
 Route::middleware(['auth:sanctum,web'])->group(function () {
@@ -431,16 +436,14 @@ Route::middleware(['auth:sanctum,web'])->group(function () {
     Route::delete('/theme-settings/testimonial/{uuid}', [SettingTokoController::class, 'deleteTestimonial']);
     Route::post('/theme-settings/seo', [SettingTokoController::class, 'updateSeo']);
 
-    // AI Branding Routes
+    // AI Branding Routes (protected - require auth)
     Route::prefix('ai')->group(function () {
         Route::get('/test', [AIController::class, 'testEndpoint']);
         Route::post('/generate-logo', [AIController::class, 'generateLogo']);
         Route::post('/refine-logo', [AIController::class, 'refineLogo']);
-        Route::get('/logo/download/{filename}', [AIController::class, 'downloadLogo']);
 
         // AI Product Photo Routes
         Route::get('/product-photo/test', [AIProductPhotoController::class, 'testEndpoint']);
         Route::post('/generate-product-photo', [AIProductPhotoController::class, 'generateProductPhoto']);
-        Route::get('/product-photo/download/{filename}', [AIProductPhotoController::class, 'downloadProductPhoto']);
     });
 });

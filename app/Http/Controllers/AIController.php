@@ -340,31 +340,30 @@ class AIController extends Controller
      * Build enhanced prompt for better logo generation with text
      */
     private function buildEnhancedLogoPrompt(string $businessName, string $userPrompt, string $style): string
-{
-    $styleDescriptions = [
-        'modern'       => 'modern, clean, friendly',
-        'simple'       => 'simple, minimal, clean lines',
-        'creative'     => 'creative, unique, playful',
-        'minimalist'   => 'minimalist, simple shapes, clean',
-        'professional' => 'professional, corporate, trustworthy',
-        'playful'      => 'playful, fun, rounded shapes',
-        'elegant'      => 'elegant, refined, balanced',
-        'bold'         => 'bold, strong, impactful',
-    ];
-    $styleDesc = $styleDescriptions[$style] ?? 'modern, clean, friendly';
+    {
+        $styleDescriptions = [
+            'modern'       => 'modern, clean, sleek',
+            'simple'       => 'simple, minimal, clean',
+            'creative'     => 'creative, unique, artistic',
+            'minimalist'   => 'minimalist, simple, clean',
+            'professional' => 'professional, corporate, trustworthy',
+            'playful'      => 'playful, fun, friendly',
+            'elegant'      => 'elegant, refined, sophisticated',
+            'bold'         => 'bold, strong, impactful',
+        ];
+        $styleDesc = $styleDescriptions[$style] ?? 'modern, clean, sleek';
 
-    return "Flat 2D {$styleDesc} logo for a digital brand named '{$businessName}'. "
-        ."Create ONE colorful icon on the left and the brand name '{$businessName}' on the right, "
-        ."similar to modern app logos: simple geometric icon + rounded wordmark. "
-        ."Use 2–3 harmonious colors, with a main brand color that stands out (for example a fresh green or warm color), "
-        ."clean vector shapes, soft rounded corners, no gradients, no textures. "
-        ."Typography: rounded sans-serif letters, very clear and legible. "
-        ."Do not add any extra text besides '{$businessName}'. "
-        ."Background: solid light color (almost white), no patterns, no photos. "
-        ."Do NOT create mockups, posters, business cards, packaging, phones, or multiple logo options in one image, "
-        ."no frames, no logo grid, just a single logo mark centered in the canvas. "
-        ."Business concept: {$userPrompt}.";
-}
+        // Very specific prompt to get SINGLE logo like Tokopedia/Shopee style
+        return "Create exactly ONE {$styleDesc} logo design. "
+            . "Layout: simple icon on the LEFT side, brand name '{$businessName}' text on the RIGHT side, horizontally aligned. "
+            . "Style: flat 2D vector, like Tokopedia or Shopee logo. "
+            . "Icon: one simple geometric shape or symbol representing: {$userPrompt}. "
+            . "Text: clean sans-serif font, all lowercase or title case. "
+            . "Colors: use 1-2 brand colors maximum. "
+            . "Background: pure white (#FFFFFF), no patterns, no gradients. "
+            . "IMPORTANT: Generate only ONE single logo, NOT multiple logos, NOT a logo grid, NOT logo variations, NOT a poster, NOT a mockup. "
+            . "The entire image should contain only one logo centered on white background.";
+    }
 
 
 
