@@ -83,11 +83,11 @@ class AIController extends Controller
                             ]
                         ],
                         'cfg_scale' => 8,
-                        'height' => 1024,
-                        'width' => 768,
+                        'height' => 768,
+                        'width' => 1024,
                         'samples' => 1,
                         'steps' => 40,
-                        'style_preset' => 'logo',
+                        'style_preset' => 'line-art',
                     ]);
 
                     if ($response->successful()) {
