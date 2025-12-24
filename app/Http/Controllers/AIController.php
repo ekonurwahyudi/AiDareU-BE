@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 class AIController extends Controller
 {
     /**
-     * Generate logo using Stability AI SDXL 1.0
+     * Generate logo using Stability AI SDXL 1.0 Text-to-Image
      */
     public function generateLogo(Request $request): JsonResponse
     {
@@ -65,17 +65,21 @@ class AIController extends Controller
 
                     Log::info("Generating logo variation " . ($i + 1), ['prompt' => $variationPrompt]);
 
-                    // Call Stability AI SDXL 1.0 Image-to-Image API
+                    // Call Stability AI SDXL 1.0 Text-to-Image API (bukan image-to-image)
                     $response = Http::withHeaders([
                         'Authorization' => 'Bearer ' . $apiKey,
+                        'Content-Type' => 'application/json',
                         'Accept' => 'application/json',
-                    ])->timeout(60)->attach(
-                        'image', $this->createBlankImage(), 'blank.png'
-                    )->post('https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image', [
-                        'text_prompts[0][text]' => $variationPrompt,
-                        'text_prompts[0][weight]' => 1,
+                    ])->timeout(60)->post('https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image', [
+                        'text_prompts' => [
+                            [
+                                'text' => $variationPrompt,
+                                'weight' => 1
+                            ]
+                        ],
                         'cfg_scale' => 7,
-                        'image_strength' => 0.35,
+                        'height' => 1024,
+                        'width' => 1024,
                         'samples' => 1,
                         'steps' => 30,
                     ]);
@@ -170,26 +174,6 @@ class AIController extends Controller
                 'message' => $e->getMessage()
             ], 500);
         }
-    }
-
-    /**
-     * Create a blank white image for Stability AI image-to-image
-     */
-    private function createBlankImage(): string
-    {
-        // Create a 1024x1024 white image
-        $image = imagecreatetruecolor(1024, 1024);
-        $white = imagecolorallocate($image, 255, 255, 255);
-        imagefill($image, 0, 0, $white);
-        
-        ob_start();
-        imagepng($image);
-        $imageContent = ob_get_contents();
-        ob_end_clean();
-        
-        imagedestroy($image);
-        
-        return $imageContent;
     }
 
     /**
