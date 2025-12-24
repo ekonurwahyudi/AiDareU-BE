@@ -436,11 +436,9 @@ Route::middleware(['auth:sanctum,web'])->group(function () {
         Route::get('/test', [AIController::class, 'testEndpoint']);
         Route::post('/generate-logo', [AIController::class, 'generateLogo']);
         Route::post('/refine-logo', [AIController::class, 'refineLogo']);
-        Route::get('/logo/download/{filename}', [AIController::class, 'downloadLogo']);
 
         // AI Product Photo Routes
         Route::get('/product-photo/test', [AIProductPhotoController::class, 'testEndpoint']);
         Route::post('/generate-product-photo', [AIProductPhotoController::class, 'generateProductPhoto']);
-        Route::get('/product-photo/download/{filename}', [AIProductPhotoController::class, 'downloadProductPhoto']);
     });
 });
