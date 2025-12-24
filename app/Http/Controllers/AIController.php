@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 class AIController extends Controller
 {
     /**
-     * Generate logo using Stability AI SDXL 1.0 Text-to-Image
+     * Generate logo using OpenAI DALL-E
      */
     public function generateLogo(Request $request): JsonResponse
     {
@@ -47,11 +47,11 @@ class AIController extends Controller
 
             Log::info('Generating logo with prompt:', ['prompt' => $fullPrompt]);
 
-            // Get Stability AI API key
-            $apiKey = env('STABILITY_API_KEY');
+            // Get OpenAI API key
+            $apiKey = env('OPENAI_API_KEY');
             if (!$apiKey || empty(trim($apiKey))) {
-                Log::error('Stability AI API key not configured');
-                throw new \Exception('Stability AI API key belum dikonfigurasi. Silakan hubungi administrator.');
+                Log::error('OpenAI API key not configured');
+                throw new \Exception('OpenAI API key belum dikonfigurasi. Silakan hubungi administrator.');
             }
 
             // Generate 2 logo variations
@@ -60,80 +60,67 @@ class AIController extends Controller
 
             for ($i = 0; $i < 2; $i++) {
                 try {
-                    // Build better prompt for logo with text
-                    $logoPrompt = $this->buildEnhancedLogoPrompt($businessName, $prompt, $style);
-                    $logoPrompt .= " Variation " . ($i + 1) . ".";
-                    
-                    Log::info("Generating logo variation " . ($i + 1), ['prompt' => $logoPrompt]);
+                    // Add variation to prompt
+                    $variationPrompt = $fullPrompt . " Variation " . ($i + 1) . ".";
 
-                    // Call Stability AI SDXL 1.0 Text-to-Image API
+                    Log::info("Generating logo variation " . ($i + 1), ['prompt' => $variationPrompt]);
+
+                    // Call OpenAI DALL-E API
                     $response = Http::withHeaders([
                         'Authorization' => 'Bearer ' . $apiKey,
                         'Content-Type' => 'application/json',
-                        'Accept' => 'application/json',
-                    ])->timeout(90)->post('https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image', [
-                        'text_prompts' => [
-                            [
-                                'text' => $logoPrompt,
-                                'weight' => 1
-                            ],
-                            [
-                                'text'   => 'blurry, low quality, distorted, watermark, signature, photo, realistic, 3d render, mockup, background objects, poster, flyer, business card, multiple logos, logo grid, pattern, illegible text, messy text, random letters',
-                                'weight' => -1,
-                            ]
-                        ],
-                        'cfg_scale' => 8,
-                        'height' => 1024,
-                        'width' => 1024,
-                        'samples' => 1,
-                        'steps' => 40,
-                        'style_preset' => 'digital-art',
+                    ])->timeout(60)->post('https://api.openai.com/v1/images/generations', [
+                        'model' => 'dall-e-3',
+                        'prompt' => $variationPrompt,
+                        'n' => 1,
+                        'size' => '1024x1024',
+                        'quality' => 'standard',
+                        'response_format' => 'url'
                     ]);
 
                     if ($response->successful()) {
                         $result = $response->json();
-                        
-                        Log::info("Stability AI response successful for variation " . ($i + 1), ['result' => $result]);
+                        $imageUrl = $result['data'][0]['url'] ?? null;
 
-                        if (isset($result['artifacts']) && is_array($result['artifacts']) && count($result['artifacts']) > 0) {
-                            $imageBase64 = $result['artifacts'][0]['base64'] ?? null;
-                            
-                            if ($imageBase64) {
-                                // Decode base64 image
-                                $imageContent = base64_decode($imageBase64);
+                        Log::info("OpenAI response successful", ['has_url' => !is_null($imageUrl)]);
+
+                        if ($imageUrl) {
+                            try {
+                                // Download the image
+                                $imageContent = file_get_contents($imageUrl);
 
                                 $filename = 'logo-' . Str::uuid() . '.png';
                                 $path = 'ai-logos/' . $filename;
 
-                                // Process image: remove white background and auto-crop
+                                // Try to process image with transparency, fallback to original if fails
                                 try {
-                                    Log::info("Starting background removal and auto-crop process for variation " . ($i + 1));
+                                    Log::info("Starting background removal process");
                                     $processedImage = $this->removeWhiteBackground($imageContent);
                                     Storage::disk('public')->put($path, $processedImage);
-                                    Log::info("Background removed and cropped successfully for variation " . ($i + 1));
+                                    Log::info("Background removed successfully");
                                 } catch (\Exception $processingError) {
-                                    Log::warning("Background removal failed for variation " . ($i + 1) . ", saving original: " . $processingError->getMessage());
+                                    Log::warning("Background removal failed, saving original: " . $processingError->getMessage());
                                     Storage::disk('public')->put($path, $imageContent);
                                 }
 
                                 // Get full URL for the saved image (force HTTPS for production)
                                 $savedImageUrl = str_replace('http://', 'https://', url('storage/' . $path));
 
-                                Log::info("Image saved successfully for variation " . ($i + 1), ['path' => $savedImageUrl]);
+                                Log::info("Image saved successfully", ['path' => $savedImageUrl]);
 
                                 $logoResults[] = [
                                     'id' => Str::uuid(),
                                     'imageUrl' => $savedImageUrl,
                                     'filename' => $filename,
-                                    'prompt' => $logoPrompt
+                                    'prompt' => $variationPrompt
                                 ];
+                            } catch (\Exception $e) {
+                                Log::error("Error downloading/saving image: " . $e->getMessage());
+                                $errors[] = "Error saving image for variation " . ($i + 1) . ": " . $e->getMessage();
                             }
-                        } else {
-                            Log::error("No artifacts in Stability AI response for variation " . ($i + 1), ['response' => $result]);
-                            $errors[] = "No image generated for variation " . ($i + 1);
                         }
                     } else {
-                        $errorMsg = 'Stability AI API error on variation ' . ($i + 1);
+                        $errorMsg = 'OpenAI API error on variation ' . ($i + 1);
                         Log::error($errorMsg, [
                             'status' => $response->status(),
                             'body' => $response->body()
@@ -143,7 +130,7 @@ class AIController extends Controller
 
                     // Add small delay between requests
                     if ($i < 1) {
-                        sleep(2);
+                        sleep(1);
                     }
                 } catch (\Exception $e) {
                     $errorMsg = 'Error generating variation ' . ($i + 1);
@@ -337,39 +324,7 @@ class AIController extends Controller
     }
 
     /**
-     * Build enhanced prompt for better logo generation with text
-     */
-    private function buildEnhancedLogoPrompt(string $businessName, string $userPrompt, string $style): string
-    {
-        $styleDescriptions = [
-            'modern'       => 'modern, clean, sleek',
-            'simple'       => 'simple, minimal, clean',
-            'creative'     => 'creative, unique, artistic',
-            'minimalist'   => 'minimalist, simple, clean',
-            'professional' => 'professional, corporate, trustworthy',
-            'playful'      => 'playful, fun, friendly',
-            'elegant'      => 'elegant, refined, sophisticated',
-            'bold'         => 'bold, strong, impactful',
-        ];
-        $styleDesc = $styleDescriptions[$style] ?? 'modern, clean, sleek';
-
-        // Very specific prompt to get SINGLE logo like Tokopedia/Shopee style
-        return "Create exactly ONE {$styleDesc} logo design. "
-            . "Layout: simple icon on the LEFT side, brand name '{$businessName}' text on the RIGHT side, horizontally aligned. "
-            . "Style: flat 2D vector, like Tokopedia or Shopee logo. "
-            . "Icon: one simple geometric shape or symbol representing: {$userPrompt}. "
-            . "Text: clean sans-serif font, all lowercase or title case. "
-            . "Colors: use 1-2 brand colors maximum. "
-            . "Background: pure white (#FFFFFF), no patterns, no gradients. "
-            . "IMPORTANT: Generate only ONE single logo, NOT multiple logos, NOT a logo grid, NOT logo variations, NOT a poster, NOT a mockup. "
-            . "The entire image should contain only one logo centered on white background.";
-    }
-
-
-
-
-    /**
-     * Build enhanced prompt for logo generation (legacy - kept for compatibility)
+     * Build enhanced prompt for logo generation
      */
     private function buildLogoPrompt(string $businessName, string $userPrompt, string $style): string
     {
@@ -386,12 +341,12 @@ class AIController extends Controller
 
         $styleDesc = $styleDescriptions[$style] ?? 'modern, clean, flat style';
 
-        // Prompt pendek khusus untuk DALL·E
-        return "Flat 2D {$styleDesc} logo for a business named '{$businessName}'. "
-            ."Use a single, simple icon representing the business on the left and the text '{$businessName}' on the right, "
-            ."or the icon on top and the text '{$businessName}' at the bottom. "
-            ."Clean sans-serif typography, no mockups, no additional objects, no decorations, "
-            ."plain white background, centered, vector-style, high contrast. "
+        // Prompt khusus untuk DALL·E - single logo, not grid
+        return "Create exactly ONE single {$styleDesc} logo for a business named '{$businessName}'. "
+            ."Layout: simple icon on the LEFT side, brand name text on the RIGHT side, horizontally aligned like Tokopedia or Shopee logo. "
+            ."Use clean sans-serif typography. "
+            ."No mockups, no additional objects, no decorations, no logo grid, no multiple logos. "
+            ."Plain white background, centered, vector-style, high contrast. "
             ."Business concept: {$userPrompt}.";
     }
 
@@ -442,11 +397,11 @@ class AIController extends Controller
     {
         return response()->json([
             'success' => true,
-            'message' => 'AI Controller is working (Stability AI)',
+            'message' => 'AI Controller is working (OpenAI DALL-E)',
             'gd_available' => extension_loaded('gd'),
             'php_version' => PHP_VERSION,
             'memory_limit' => ini_get('memory_limit'),
-            'stability_configured' => !empty(env('STABILITY_API_KEY'))
+            'openai_configured' => !empty(env('OPENAI_API_KEY'))
         ]);
     }
 
