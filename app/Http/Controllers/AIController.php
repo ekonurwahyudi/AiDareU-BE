@@ -12,12 +12,12 @@ use Illuminate\Support\Str;
 class AIController extends Controller
 {
     /**
-     * Generate logo using OpenAI DALL-E
+     * Generate logo using fal.ai FLUX 2 Pro
+     * FLUX 2 Pro delivers state-of-the-art image quality with excellent prompt adherence
      */
     public function generateLogo(Request $request): JsonResponse
     {
-        Log::info('=== AI Logo Generation Request Started ===');
-        Log::info('Request method: ' . $request->method());
+        Log::info('=== AI Logo Generation Request Started (fal.ai FLUX 2 Pro) ===');
         Log::info('Request data:', $request->all());
 
         try {
@@ -25,33 +25,18 @@ class AIController extends Controller
                 'business_name' => 'required|string|max:200',
                 'prompt' => 'required|string|max:1000',
                 'style' => 'required|string|in:modern,simple,creative,minimalist,professional,playful,elegant,bold',
-                'image' => 'nullable|image|max:5120' // max 5MB
+                'image' => 'nullable|image|max:5120'
             ]);
-
-            Log::info('Validation passed');
 
             $businessName = $request->input('business_name');
             $prompt = $request->input('prompt');
             $style = $request->input('style');
 
-            // Build enhanced prompt with business name and style
-            $enhancedPrompt = $this->buildLogoPrompt($businessName, $prompt, $style);
-
-            // If image is provided, we'll use it as reference in the prompt
-            $imageDescription = '';
-            if ($request->hasFile('image')) {
-                $imageDescription = ' Based on the uploaded sketch/reference image, ';
-            }
-
-            $fullPrompt = $enhancedPrompt . $imageDescription;
-
-            Log::info('Generating logo with prompt:', ['prompt' => $fullPrompt]);
-
-            // Get OpenAI API key
-            $apiKey = env('OPENAI_API_KEY');
+            // Get fal.ai API key
+            $apiKey = env('FAL_API_KEY');
             if (!$apiKey || empty(trim($apiKey))) {
-                Log::error('OpenAI API key not configured');
-                throw new \Exception('OpenAI API key belum dikonfigurasi. Silakan hubungi administrator.');
+                Log::error('fal.ai API key not configured');
+                throw new \Exception('fal.ai API key belum dikonfigurasi. Silakan hubungi administrator.');
             }
 
             // Generate 2 logo variations
@@ -60,103 +45,86 @@ class AIController extends Controller
 
             for ($i = 0; $i < 2; $i++) {
                 try {
-                    // Add variation to prompt
-                    $variationPrompt = $fullPrompt . " Variation " . ($i + 1) . ".";
+                    // Build logo prompt
+                    $logoPrompt = $this->buildLogoPrompt($businessName, $prompt, $style, $i + 1);
+                    
+                    Log::info("Generating logo variation " . ($i + 1), ['prompt' => $logoPrompt]);
 
-                    Log::info("Generating logo variation " . ($i + 1), ['prompt' => $variationPrompt]);
-
-                    // Call OpenAI DALL-E API
+                    // Call fal.ai FLUX 2 Pro API
                     $response = Http::withHeaders([
-                        'Authorization' => 'Bearer ' . $apiKey,
+                        'Authorization' => 'Key ' . $apiKey,
                         'Content-Type' => 'application/json',
-                    ])->timeout(60)->post('https://api.openai.com/v1/images/generations', [
-                        'model' => 'dall-e-3',
-                        'prompt' => $variationPrompt,
-                        'n' => 1,
-                        'size' => '1024x1024',
-                        'quality' => 'standard',
-                        'response_format' => 'url'
+                    ])->timeout(120)->post('https://fal.run/fal-ai/flux-2-pro', [
+                        'prompt' => $logoPrompt,
+                        'image_size' => 'square_hd',  // 1024x1024 HD
+                        'num_inference_steps' => 30,
+                        'guidance_scale' => 8.0,
+                        'num_images' => 1,
+                        'enable_safety_checker' => false,
                     ]);
 
                     if ($response->successful()) {
                         $result = $response->json();
-                        $imageUrl = $result['data'][0]['url'] ?? null;
+                        Log::info("fal.ai FLUX 2 Pro response for variation " . ($i + 1), ['result' => $result]);
 
-                        Log::info("OpenAI response successful", ['has_url' => !is_null($imageUrl)]);
+                        // FLUX 2 Pro returns images array with url
+                        if (isset($result['images']) && is_array($result['images']) && count($result['images']) > 0) {
+                            $imageUrl = $result['images'][0]['url'] ?? null;
 
-                        if ($imageUrl) {
-                            try {
-                                // Download the image
+                            if ($imageUrl) {
+                                // Download and save image
                                 $imageContent = file_get_contents($imageUrl);
-
                                 $filename = 'logo-' . Str::uuid() . '.png';
                                 $path = 'ai-logos/' . $filename;
 
-                                // Try to process image with transparency, fallback to original if fails
+                                // Process: remove white background
                                 try {
-                                    Log::info("Starting background removal process");
                                     $processedImage = $this->removeWhiteBackground($imageContent);
                                     Storage::disk('public')->put($path, $processedImage);
-                                    Log::info("Background removed successfully");
-                                } catch (\Exception $processingError) {
-                                    Log::warning("Background removal failed, saving original: " . $processingError->getMessage());
+                                    Log::info("Background removed for variation " . ($i + 1));
+                                } catch (\Exception $e) {
+                                    Log::warning("Background removal failed: " . $e->getMessage());
                                     Storage::disk('public')->put($path, $imageContent);
                                 }
 
-                                // Get full URL for the saved image (force HTTPS for production)
                                 $savedImageUrl = str_replace('http://', 'https://', url('storage/' . $path));
 
-                                Log::info("Image saved successfully", ['path' => $savedImageUrl]);
-
                                 $logoResults[] = [
-                                    'id' => Str::uuid(),
+                                    'id' => (string) Str::uuid(),
                                     'imageUrl' => $savedImageUrl,
                                     'filename' => $filename,
-                                    'prompt' => $variationPrompt
+                                    'prompt' => $logoPrompt
                                 ];
-                            } catch (\Exception $e) {
-                                Log::error("Error downloading/saving image: " . $e->getMessage());
-                                $errors[] = "Error saving image for variation " . ($i + 1) . ": " . $e->getMessage();
                             }
+                        } else {
+                            $errors[] = "No image in response for variation " . ($i + 1);
                         }
                     } else {
-                        $errorMsg = 'OpenAI API error on variation ' . ($i + 1);
-                        Log::error($errorMsg, [
-                            'status' => $response->status(),
-                            'body' => $response->body()
-                        ]);
+                        $errorMsg = 'fal.ai API error on variation ' . ($i + 1);
+                        Log::error($errorMsg, ['status' => $response->status(), 'body' => $response->body()]);
                         $errors[] = $errorMsg . ': ' . $response->body();
                     }
 
-                    // Add small delay between requests
-                    if ($i < 1) {
-                        sleep(1);
-                    }
+                    if ($i < 1) sleep(1);
                 } catch (\Exception $e) {
-                    $errorMsg = 'Error generating variation ' . ($i + 1);
-                    Log::error($errorMsg, ['error' => $e->getMessage()]);
-                    $errors[] = $errorMsg . ': ' . $e->getMessage();
+                    Log::error('Error generating variation ' . ($i + 1), ['error' => $e->getMessage()]);
+                    $errors[] = 'Error variation ' . ($i + 1) . ': ' . $e->getMessage();
                 }
             }
 
             if (empty($logoResults)) {
-                $errorDetails = !empty($errors) ? ' Errors: ' . implode('; ', $errors) : '';
-                throw new \Exception('Failed to generate any logos. Please try again.' . $errorDetails);
+                throw new \Exception('Failed to generate logos. ' . implode('; ', $errors));
             }
 
             return response()->json([
                 'success' => true,
                 'message' => 'Logos generated successfully',
                 'data' => $logoResults,
-                'errors' => $errors // Include any partial errors
+                'errors' => $errors
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Logo generation error:', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
+            Log::error('Logo generation error:', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage()
@@ -165,111 +133,104 @@ class AIController extends Controller
     }
 
     /**
-     * Remove white background and make it transparent
+     * Build prompt for logo generation
+     */
+    private function buildLogoPrompt(string $businessName, string $userPrompt, string $style, int $variation): string
+    {
+        $styleMap = [
+            'modern'       => 'modern minimalist',
+            'simple'       => 'simple clean',
+            'creative'     => 'creative unique',
+            'minimalist'   => 'ultra minimalist',
+            'professional' => 'professional corporate',
+            'playful'      => 'playful friendly',
+            'elegant'      => 'elegant sophisticated',
+            'bold'         => 'bold impactful',
+        ];
+
+        $styleDesc = $styleMap[$style] ?? 'modern minimalist';
+
+        return "Create a single {$styleDesc} logo for '{$businessName}'. "
+            . "Design: simple icon on left, brand name text '{$businessName}' on right, horizontally aligned. "
+            . "Style: flat vector, clean lines, 2-3 colors maximum. "
+            . "Concept: {$userPrompt}. "
+            . "White background, centered, professional quality. "
+            . "Variation {$variation}.";
+    }
+
+    /**
+     * Remove white background and make transparent
      */
     private function removeWhiteBackground(string $imageContent): string
     {
-        // Check if GD extension is loaded
         if (!extension_loaded('gd')) {
-            Log::warning('GD extension not available, returning original image');
             return $imageContent;
         }
 
         try {
-            // Increase memory limit for image processing
             $oldMemoryLimit = ini_get('memory_limit');
             ini_set('memory_limit', '512M');
 
-            // Create image from string
             $image = @imagecreatefromstring($imageContent);
             if (!$image) {
-                Log::warning('Failed to create image from string, returning original');
                 ini_set('memory_limit', $oldMemoryLimit);
-                return $imageContent; // Return original if processing fails
+                return $imageContent;
             }
+
+            $width = imagesx($image);
+            $height = imagesy($image);
+
+            $transparent = imagecreatetruecolor($width, $height);
+            imagealphablending($transparent, false);
+            imagesavealpha($transparent, true);
+
+            $transparentColor = imagecolorallocatealpha($transparent, 0, 0, 0, 127);
+            imagefill($transparent, 0, 0, $transparentColor);
+
+            $tolerance = 30;
+
+            for ($x = 0; $x < $width; $x++) {
+                for ($y = 0; $y < $height; $y++) {
+                    $rgb = imagecolorat($image, $x, $y);
+                    $colors = imagecolorsforindex($image, $rgb);
+
+                    if ($colors['red'] >= (255 - $tolerance) &&
+                        $colors['green'] >= (255 - $tolerance) &&
+                        $colors['blue'] >= (255 - $tolerance)) {
+                        $newColor = imagecolorallocatealpha($transparent, $colors['red'], $colors['green'], $colors['blue'], 127);
+                    } else {
+                        $newColor = imagecolorallocatealpha($transparent, $colors['red'], $colors['green'], $colors['blue'], $colors['alpha']);
+                    }
+                    imagesetpixel($transparent, $x, $y, $newColor);
+                }
+            }
+
+            $transparent = $this->autoCropImage($transparent);
+
+            ob_start();
+            imagepng($transparent, null, 9);
+            $processedContent = ob_get_contents();
+            ob_end_clean();
+
+            imagedestroy($image);
+            imagedestroy($transparent);
+            ini_set('memory_limit', $oldMemoryLimit);
+
+            return $processedContent;
         } catch (\Throwable $e) {
-            Log::error('Error in removeWhiteBackground: ' . $e->getMessage());
+            Log::error('removeWhiteBackground error: ' . $e->getMessage());
             return $imageContent;
         }
-
-        // Get image dimensions
-        $width = imagesx($image);
-        $height = imagesy($image);
-
-        // Create new image with alpha channel
-        $transparent = imagecreatetruecolor($width, $height);
-
-        // Enable alpha blending and save alpha channel
-        imagealphablending($transparent, false);
-        imagesavealpha($transparent, true);
-
-        // Fill with transparent color
-        $transparentColor = imagecolorallocatealpha($transparent, 0, 0, 0, 127);
-        imagefill($transparent, 0, 0, $transparentColor);
-
-        // Define white color range for removal (adjust tolerance as needed)
-        $tolerance = 30; // Adjust this value (0-127) for more/less aggressive removal
-
-        // Process each pixel
-        for ($x = 0; $x < $width; $x++) {
-            for ($y = 0; $y < $height; $y++) {
-                $rgb = imagecolorat($image, $x, $y);
-                $colors = imagecolorsforindex($image, $rgb);
-
-                // Check if pixel is white (or close to white)
-                if ($colors['red'] >= (255 - $tolerance) &&
-                    $colors['green'] >= (255 - $tolerance) &&
-                    $colors['blue'] >= (255 - $tolerance)) {
-                    // Make it transparent
-                    $newColor = imagecolorallocatealpha($transparent,
-                        $colors['red'],
-                        $colors['green'],
-                        $colors['blue'],
-                        127
-                    );
-                } else {
-                    // Keep original color
-                    $newColor = imagecolorallocatealpha($transparent,
-                        $colors['red'],
-                        $colors['green'],
-                        $colors['blue'],
-                        $colors['alpha']
-                    );
-                }
-                imagesetpixel($transparent, $x, $y, $newColor);
-            }
-        }
-
-        // Auto-crop to remove excess transparent space and optimize size
-        $transparent = $this->autoCropImage($transparent);
-
-        // Save to buffer
-        ob_start();
-        imagepng($transparent, null, 9); // 9 = maximum compression
-        $processedContent = ob_get_contents();
-        ob_end_clean();
-
-        // Clean up
-        imagedestroy($image);
-        imagedestroy($transparent);
-
-        // Restore memory limit
-        ini_set('memory_limit', $oldMemoryLimit);
-
-        Log::info('Image processed successfully with transparent background');
-
-        return $processedContent;
     }
 
     /**
-     * Auto-crop image to remove excess transparent space
+     * Auto-crop transparent space
      */
     private function autoCropImage($image)
     {
         $width = imagesx($image);
         $height = imagesy($image);
 
-        // Find boundaries
         $top = $height;
         $bottom = 0;
         $left = $width;
@@ -280,7 +241,6 @@ class AIController extends Controller
                 $rgb = imagecolorat($image, $x, $y);
                 $colors = imagecolorsforindex($image, $rgb);
 
-                // Check if pixel is not transparent
                 if ($colors['alpha'] < 127) {
                     if ($x < $left) $left = $x;
                     if ($x > $right) $right = $x;
@@ -290,123 +250,71 @@ class AIController extends Controller
             }
         }
 
-        // Add small padding (5% of dimensions)
         $padding = 20;
         $left = max(0, $left - $padding);
         $top = max(0, $top - $padding);
         $right = min($width - 1, $right + $padding);
         $bottom = min($height - 1, $bottom + $padding);
 
-        // Calculate new dimensions
         $newWidth = $right - $left + 1;
         $newHeight = $bottom - $top + 1;
 
-        // Don't crop if no content found
         if ($newWidth <= 0 || $newHeight <= 0) {
             return $image;
         }
 
-        // Create cropped image
         $cropped = imagecreatetruecolor($newWidth, $newHeight);
         imagealphablending($cropped, false);
         imagesavealpha($cropped, true);
 
-        // Fill with transparent
         $transparentColor = imagecolorallocatealpha($cropped, 0, 0, 0, 127);
         imagefill($cropped, 0, 0, $transparentColor);
 
-        // Copy cropped portion
         imagecopy($cropped, $image, 0, 0, $left, $top, $newWidth, $newHeight);
-
         imagedestroy($image);
 
         return $cropped;
     }
 
     /**
-     * Build enhanced prompt for logo generation
-     */
-    private function buildLogoPrompt(string $businessName, string $userPrompt, string $style): string
-    {
-        $styleDescriptions = [
-            'modern'      => 'modern, clean, flat style',
-            'simple'      => 'simple and minimalistic',
-            'creative'    => 'creative and unique',
-            'minimalist'  => 'minimalist with simple shapes',
-            'professional'=> 'professional corporate style',
-            'playful'     => 'playful with friendly shapes',
-            'elegant'     => 'elegant with refined lines',
-            'bold'        => 'bold and impactful',
-        ];
-
-        $styleDesc = $styleDescriptions[$style] ?? 'modern, clean, flat style';
-
-        // Prompt khusus untuk DALL·E - single logo, not grid
-        return "Create exactly ONE single {$styleDesc} logo for a business named '{$businessName}'. "
-            ."Layout: simple icon on the LEFT side, brand name text on the RIGHT side, horizontally aligned like Tokopedia or Shopee logo. "
-            ."Use clean sans-serif typography. "
-            ."No mockups, no additional objects, no decorations, no logo grid, no multiple logos. "
-            ."Plain white background, centered, vector-style, high contrast. "
-            ."Business concept: {$userPrompt}.";
-    }
-
-    /**
-     * Download logo file via proxy to avoid CORS
+     * Download logo file - public endpoint without auth
      */
     public function downloadLogo(string $filename)
     {
         try {
             $path = 'ai-logos/' . $filename;
 
-            // Check if file exists
             if (!Storage::disk('public')->exists($path)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Logo file not found'
-                ], 404);
+                return response()->json(['success' => false, 'message' => 'File not found'], 404);
             }
 
-            // Get file contents
             $file = Storage::disk('public')->get($path);
 
-            // Return file as download with proper headers
             return response($file, 200)
                 ->header('Content-Type', 'image/png')
-                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"')
-                ->header('Access-Control-Allow-Origin', '*')
-                ->header('Access-Control-Allow-Methods', 'GET')
-                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
 
         } catch (\Exception $e) {
-            Log::error('Logo download error:', [
-                'filename' => $filename,
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to download logo: ' . $e->getMessage()
-            ], 500);
+            Log::error('Download error:', ['filename' => $filename, 'error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Test endpoint to check if controller is working
+     * Test endpoint
      */
     public function testEndpoint(): JsonResponse
     {
         return response()->json([
             'success' => true,
-            'message' => 'AI Controller is working (OpenAI DALL-E)',
+            'message' => 'AI Controller (fal.ai FLUX 2 Pro)',
             'gd_available' => extension_loaded('gd'),
-            'php_version' => PHP_VERSION,
-            'memory_limit' => ini_get('memory_limit'),
-            'openai_configured' => !empty(env('OPENAI_API_KEY'))
+            'fal_configured' => !empty(env('FAL_API_KEY'))
         ]);
     }
 
     /**
-     * Refine/edit existing logo
+     * Refine logo
      */
     public function refineLogo(Request $request): JsonResponse
     {
@@ -416,7 +324,6 @@ class AIController extends Controller
             'style' => 'required|string'
         ]);
 
-        // Reuse the generateLogo method with refined prompt
         $request->merge([
             'prompt' => $request->original_prompt . ' ' . $request->refinement_instructions
         ]);
