@@ -87,7 +87,7 @@ class AIController extends Controller
                                     Storage::disk('public')->put($path, $imageContent);
                                 }
 
-                                $savedImageUrl = str_replace('http://', 'https://', url('api/storage/' . $path));
+                                $savedImageUrl = str_replace('http://', 'https://', url('storage/' . $path));
 
                                 $logoResults[] = [
                                     'id' => (string) Str::uuid(),
@@ -290,9 +290,15 @@ class AIController extends Controller
 
             $file = Storage::disk('public')->get($path);
 
+            // Get origin from request for CORS
+            $origin = request()->header('Origin', '*');
+
             return response($file, 200)
                 ->header('Content-Type', 'image/png')
-                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"')
+                ->header('Access-Control-Allow-Origin', $origin)
+                ->header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization, X-Requested-With');
 
         } catch (\Exception $e) {
             Log::error('Download error:', ['filename' => $filename, 'error' => $e->getMessage()]);

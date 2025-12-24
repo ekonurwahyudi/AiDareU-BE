@@ -105,7 +105,7 @@ class AIProductPhotoController extends Controller
                             Storage::disk('public')->put($path, $imageContent);
 
                             // Get full URL for the saved image (force HTTPS for production)
-                            $savedImageUrl = str_replace('http://', 'https://', url('api/storage/' . $path));
+                            $savedImageUrl = str_replace('http://', 'https://', url('storage/' . $path));
 
                             Log::info('Product photo URL generated', [
                                 'url' => $savedImageUrl,
@@ -416,13 +416,16 @@ class AIProductPhotoController extends Controller
             // Get file contents
             $file = Storage::disk('public')->get($path);
 
+            // Get origin from request for CORS
+            $origin = request()->header('Origin', '*');
+
             // Return file as download with proper headers
             return response($file, 200)
                 ->header('Content-Type', 'image/png')
                 ->header('Content-Disposition', 'attachment; filename="' . $filename . '"')
-                ->header('Access-Control-Allow-Origin', '*')
-                ->header('Access-Control-Allow-Methods', 'GET')
-                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization');
+                ->header('Access-Control-Allow-Origin', $origin)
+                ->header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization, X-Requested-With');
 
         } catch (\Exception $e) {
             Log::error('Product photo download error:', [

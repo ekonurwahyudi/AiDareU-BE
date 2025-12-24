@@ -38,7 +38,7 @@ $storageHandler = function ($path) {
         $file = Storage::disk('public')->get($path);
 
         // CORS headers - allow all origins for public storage files
-        $origin = request()->header('Origin') ?: '*';
+        $origin = request()->header('Origin', '*');
 
         // Return response with CORS headers
         return Response::make($file, 200, [
@@ -48,6 +48,7 @@ $storageHandler = function ($path) {
             'Access-Control-Allow-Origin' => $origin,
             'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
             'Access-Control-Allow-Headers' => 'Content-Type, Accept, Authorization, X-Requested-With',
+            'Access-Control-Expose-Headers' => 'Content-Disposition, Content-Type',
             'X-Content-Type-Options' => 'nosniff',
         ]);
     } catch (\Exception $e) {
@@ -61,12 +62,13 @@ $storageHandler = function ($path) {
 
 // OPTIONS handler for CORS preflight
 $optionsHandler = function () {
-    $origin = request()->header('Origin') ?: '*';
+    $origin = request()->header('Origin', '*');
     
     return Response::make('', 204, [
         'Access-Control-Allow-Origin' => $origin,
         'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
         'Access-Control-Allow-Headers' => 'Content-Type, Accept, Authorization, X-Requested-With',
+        'Access-Control-Expose-Headers' => 'Content-Disposition, Content-Type',
         'Access-Control-Max-Age' => '86400',
     ]);
 };
