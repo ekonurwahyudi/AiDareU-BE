@@ -101,7 +101,7 @@ class AIProductPhotoController extends Controller
                             $filename     = 'product-photo-' . Str::uuid() . '.png';
                             $path         = 'ai-product-photos/' . $filename;
 
-                            // Save original image only (no compression for now to match logo behavior)
+                            // Save original image
                             Storage::disk('public')->put($path, $imageContent);
 
                             // Get full URL for the saved image (force HTTPS for production)
@@ -114,7 +114,7 @@ class AIProductPhotoController extends Controller
 
                             $photoResults[] = [
                                 'id' => (string) Str::uuid(),
-                                'imageUrl' => $savedImageUrl, // Same URL for display and download
+                                'imageUrl' => $savedImageUrl,
                                 'filename' => $filename,
                                 'prompt' => $prompt
                             ];
@@ -317,7 +317,7 @@ class AIProductPhotoController extends Controller
     /**
      * Compress image for faster loading while maintaining quality
      */
-    private function compressImage(string $imageContent): string
+    private function compressImage(string $imageContent, int $maxSize = 600): string
     {
         // Check if GD extension is loaded
         if (!extension_loaded('gd')) {
@@ -336,8 +336,7 @@ class AIProductPhotoController extends Controller
             $width = imagesx($image);
             $height = imagesy($image);
 
-            // Calculate new dimensions (max 800px on longest side for display)
-            $maxSize = 800;
+            // Calculate new dimensions
             if ($width > $height) {
                 if ($width > $maxSize) {
                     $newWidth = $maxSize;
