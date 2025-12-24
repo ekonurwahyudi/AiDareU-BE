@@ -60,75 +60,76 @@ class AIController extends Controller
 
             for ($i = 0; $i < 2; $i++) {
                 try {
-                    // Add variation to prompt
-                    $variationPrompt = $fullPrompt . " Variation " . ($i + 1) . ".";
+                    // Build better prompt for logo with text
+                    $logoPrompt = $this->buildEnhancedLogoPrompt($businessName, $prompt, $style);
+                    $logoPrompt .= " Variation " . ($i + 1) . ".";
+                    
+                    Log::info("Generating logo variation " . ($i + 1), ['prompt' => $logoPrompt]);
 
-                    Log::info("Generating logo variation " . ($i + 1), ['prompt' => $variationPrompt]);
-
-                    // Call Stability AI SDXL 1.0 Text-to-Image API (bukan image-to-image)
+                    // Call Stability AI SDXL 1.0 Text-to-Image API
                     $response = Http::withHeaders([
                         'Authorization' => 'Bearer ' . $apiKey,
                         'Content-Type' => 'application/json',
                         'Accept' => 'application/json',
-                    ])->timeout(60)->post('https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image', [
+                    ])->timeout(90)->post('https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image', [
                         'text_prompts' => [
                             [
-                                'text' => $variationPrompt,
+                                'text' => $logoPrompt,
                                 'weight' => 1
+                            ],
+                            [
+                                'text' => 'blurry, low quality, distorted, watermark, signature, photo, realistic, 3d render, mockup, background objects',
+                                'weight' => -1
                             ]
                         ],
-                        'cfg_scale' => 7,
+                        'cfg_scale' => 8,
                         'height' => 1024,
                         'width' => 1024,
                         'samples' => 1,
-                        'steps' => 30,
+                        'steps' => 40,
+                        'style_preset' => 'digital-art',
                     ]);
 
                     if ($response->successful()) {
                         $result = $response->json();
                         
-                        Log::info("Stability AI response successful", ['result' => $result]);
+                        Log::info("Stability AI response successful for variation " . ($i + 1), ['result' => $result]);
 
                         if (isset($result['artifacts']) && is_array($result['artifacts']) && count($result['artifacts']) > 0) {
                             $imageBase64 = $result['artifacts'][0]['base64'] ?? null;
                             
                             if ($imageBase64) {
+                                // Decode base64 image
+                                $imageContent = base64_decode($imageBase64);
+
+                                $filename = 'logo-' . Str::uuid() . '.png';
+                                $path = 'ai-logos/' . $filename;
+
+                                // Process image: remove white background and auto-crop
                                 try {
-                                    // Decode base64 image
-                                    $imageContent = base64_decode($imageBase64);
-
-                                    $filename = 'logo-' . Str::uuid() . '.png';
-                                    $path = 'ai-logos/' . $filename;
-
-                                    // Try to process image with transparency, fallback to original if fails
-                                    try {
-                                        Log::info("Starting background removal process");
-                                        $processedImage = $this->removeWhiteBackground($imageContent);
-                                        Storage::disk('public')->put($path, $processedImage);
-                                        Log::info("Background removed successfully");
-                                    } catch (\Exception $processingError) {
-                                        Log::warning("Background removal failed, saving original: " . $processingError->getMessage());
-                                        Storage::disk('public')->put($path, $imageContent);
-                                    }
-
-                                    // Get full URL for the saved image (force HTTPS for production)
-                                    $savedImageUrl = str_replace('http://', 'https://', url('storage/' . $path));
-
-                                    Log::info("Image saved successfully", ['path' => $savedImageUrl]);
-
-                                    $logoResults[] = [
-                                        'id' => Str::uuid(),
-                                        'imageUrl' => $savedImageUrl,
-                                        'filename' => $filename, // Add filename for download endpoint
-                                        'prompt' => $variationPrompt
-                                    ];
-                                } catch (\Exception $e) {
-                                    Log::error("Error processing/saving image: " . $e->getMessage());
-                                    $errors[] = "Error saving image for variation " . ($i + 1) . ": " . $e->getMessage();
+                                    Log::info("Starting background removal and auto-crop process for variation " . ($i + 1));
+                                    $processedImage = $this->removeWhiteBackground($imageContent);
+                                    Storage::disk('public')->put($path, $processedImage);
+                                    Log::info("Background removed and cropped successfully for variation " . ($i + 1));
+                                } catch (\Exception $processingError) {
+                                    Log::warning("Background removal failed for variation " . ($i + 1) . ", saving original: " . $processingError->getMessage());
+                                    Storage::disk('public')->put($path, $imageContent);
                                 }
+
+                                // Get full URL for the saved image (force HTTPS for production)
+                                $savedImageUrl = str_replace('http://', 'https://', url('storage/' . $path));
+
+                                Log::info("Image saved successfully for variation " . ($i + 1), ['path' => $savedImageUrl]);
+
+                                $logoResults[] = [
+                                    'id' => Str::uuid(),
+                                    'imageUrl' => $savedImageUrl,
+                                    'filename' => $filename,
+                                    'prompt' => $logoPrompt
+                                ];
                             }
                         } else {
-                            Log::error("No artifacts in Stability AI response", ['response' => $result]);
+                            Log::error("No artifacts in Stability AI response for variation " . ($i + 1), ['response' => $result]);
                             $errors[] = "No image generated for variation " . ($i + 1);
                         }
                     } else {
@@ -142,7 +143,7 @@ class AIController extends Controller
 
                     // Add small delay between requests
                     if ($i < 1) {
-                        sleep(1);
+                        sleep(2);
                     }
                 } catch (\Exception $e) {
                     $errorMsg = 'Error generating variation ' . ($i + 1);
@@ -336,7 +337,35 @@ class AIController extends Controller
     }
 
     /**
-     * Build enhanced prompt for logo generation
+     * Build enhanced prompt for better logo generation with text
+     */
+    private function buildEnhancedLogoPrompt(string $businessName, string $userPrompt, string $style): string
+    {
+        $styleDescriptions = [
+            'modern'      => 'modern, clean, minimalist',
+            'simple'      => 'simple, minimal, clean lines',
+            'creative'    => 'creative, unique, artistic',
+            'minimalist'  => 'minimalist, simple shapes, clean',
+            'professional'=> 'professional, corporate, elegant',
+            'playful'     => 'playful, fun, friendly',
+            'elegant'     => 'elegant, sophisticated, refined',
+            'bold'        => 'bold, strong, impactful',
+        ];
+
+        $styleDesc = $styleDescriptions[$style] ?? 'modern, clean, minimalist';
+
+        // Enhanced prompt for Stability AI
+        return "Professional logo design, {$styleDesc} style. "
+            . "Logo text: '{$businessName}'. "
+            . "Concept: {$userPrompt}. "
+            . "Flat vector style, simple icon with text, clean typography, "
+            . "white background, centered composition, high contrast, "
+            . "professional branding, corporate identity, "
+            . "no mockups, no 3D, no photos, pure logo design";
+    }
+
+    /**
+     * Build enhanced prompt for logo generation (legacy - kept for compatibility)
      */
     private function buildLogoPrompt(string $businessName, string $userPrompt, string $style): string
     {
