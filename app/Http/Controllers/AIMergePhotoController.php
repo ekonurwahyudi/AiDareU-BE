@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 class AIMergePhotoController extends Controller
 {
     /**
-     * Generate merged/combined photo from multiple images
+     * Generate merged/combined photo from multiple images using nano-banana edit
      */
     public function generateMergedPhoto(Request $request): JsonResponse
     {
@@ -24,7 +24,7 @@ class AIMergePhotoController extends Controller
                 'aspect_ratio' => 'required|string|in:1:1,16:9,9:16',
             ]);
 
-            Log::info('AI Merge Photo: validation passed', [
+            Log::info('AI Merge Photo (nano-banana): validation passed', [
                 'image_count' => count($request->file('images')),
                 'instruction' => $request->input('instruction'),
                 'aspect_ratio' => $request->input('aspect_ratio')
@@ -50,39 +50,31 @@ class AIMergePhotoController extends Controller
             // Build prompt for merging
             $prompt = $this->buildMergePrompt($instruction, count($imageUrls));
 
-            // Convert aspect ratio
-            $aspectRatioMap = [
-                '1:1' => '1:1',
-                '16:9' => '16:9',
-                '9:16' => '9:16',
-            ];
-            $falAspectRatio = $aspectRatioMap[$aspectRatio] ?? '1:1';
-
             $photoResults = [];
             $errors = [];
 
-            // Generate 2 variations
+            // Generate 2 variations using nano-banana edit
             for ($i = 0; $i < 2; $i++) {
                 try {
-                    Log::info('Generating merge variation ' . ($i + 1));
+                    Log::info('Generating merge variation ' . ($i + 1) . ' with nano-banana');
 
-                    // Use kontext model for image merging/editing
+                    // Use nano-banana edit endpoint (same as product photo)
                     $response = Http::withHeaders([
                         'Authorization' => 'Key ' . $apiKey,
                         'Content-Type' => 'application/json',
                     ])
                     ->timeout(180)
-                    ->post('https://fal.run/fal-ai/flux-pro/kontext', [
+                    ->post('https://fal.run/fal-ai/nano-banana/edit', [
                         'prompt' => $prompt,
                         'image_urls' => $imageUrls,
-                        'aspect_ratio' => $falAspectRatio,
+                        'num_images' => 1,
+                        'aspect_ratio' => $aspectRatio,
                         'output_format' => 'png',
-                        'safety_tolerance' => 6,
                     ]);
 
                     if ($response->successful()) {
                         $result = $response->json();
-                        Log::info('fal.ai response for variation ' . ($i + 1), ['result' => $result]);
+                        Log::info('nano-banana response for variation ' . ($i + 1), ['result' => $result]);
 
                         if (isset($result['images']) && is_array($result['images']) && count($result['images']) > 0) {
                             $generatedImageUrl = $result['images'][0]['url'];
@@ -129,7 +121,7 @@ class AIMergePhotoController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Merged photos generated successfully',
+                'message' => 'Merged photos generated successfully (nano-banana)',
                 'data' => $photoResults,
                 'errors' => $errors,
             ]);
@@ -144,7 +136,8 @@ class AIMergePhotoController extends Controller
     }
 
     /**
-     * Generate instruction suggestion using AI based on uploaded images
+     * Generate instruction suggestion based on uploaded images
+     * Returns a default creative instruction since vision analysis may not be available
      */
     public function generateInstruction(Request $request): JsonResponse
     {
@@ -154,79 +147,48 @@ class AIMergePhotoController extends Controller
                 'images.*' => 'required|image|max:10240',
             ]);
 
-            $apiKey = env('FAL_API_KEY');
-            if (!$apiKey || trim($apiKey) === '') {
-                throw new \Exception('fal.ai API key belum dikonfigurasi.');
-            }
+            $imageCount = count($request->file('images'));
+            
+            // Generate creative instruction suggestions based on image count
+            $suggestions = [
+                2 => [
+                    'Gabungkan kedua gambar ini menjadi satu komposisi yang harmonis, dengan transisi yang halus antara elemen-elemen utama.',
+                    'Kombinasikan subjek dari foto pertama dengan latar belakang foto kedua secara natural.',
+                    'Buat kolase kreatif yang menggabungkan elemen terbaik dari kedua foto dengan pencahayaan yang konsisten.',
+                    'Satukan kedua gambar dengan blending yang smooth, pertahankan detail penting dari masing-masing foto.',
+                ],
+                3 => [
+                    'Gabungkan ketiga gambar ini menjadi satu panorama atau kolase yang menarik dengan transisi seamless.',
+                    'Kombinasikan elemen utama dari setiap foto menjadi satu komposisi yang kohesif dan profesional.',
+                    'Buat montase kreatif dari ketiga foto dengan pencahayaan dan warna yang seragam.',
+                ],
+                4 => [
+                    'Susun keempat gambar menjadi grid atau kolase artistik dengan tema yang konsisten.',
+                    'Gabungkan elemen-elemen penting dari setiap foto menjadi satu karya visual yang menarik.',
+                    'Buat komposisi kreatif yang menggabungkan keempat foto dengan transisi yang halus.',
+                ],
+                5 => [
+                    'Kombinasikan kelima gambar menjadi satu montase atau kolase yang eye-catching.',
+                    'Gabungkan semua elemen dari foto-foto ini menjadi satu komposisi panoramik yang menakjubkan.',
+                    'Buat karya visual yang menggabungkan kelima foto dengan tema dan warna yang harmonis.',
+                ],
+            ];
 
-            // Upload images temporarily
-            $imageUrls = [];
-            foreach ($request->file('images') as $uploadedFile) {
-                $imageUrl = $this->uploadToTemporaryStorage($uploadedFile);
-                $imageUrls[] = $imageUrl;
-            }
+            $availableSuggestions = $suggestions[$imageCount] ?? $suggestions[2];
+            $randomInstruction = $availableSuggestions[array_rand($availableSuggestions)];
 
-            // Use vision model to analyze images and suggest instruction
-            $response = Http::withHeaders([
-                'Authorization' => 'Key ' . $apiKey,
-                'Content-Type' => 'application/json',
-            ])
-            ->timeout(60)
-            ->post('https://fal.run/fal-ai/llava-next', [
-                'prompt' => 'Analyze these images and suggest a creative instruction in Indonesian (Bahasa Indonesia) for combining/merging them into one cohesive image. The instruction should be specific and descriptive, mentioning what elements from each image should be combined and how. Keep it under 100 words. Only output the instruction, nothing else.',
-                'image_urls' => $imageUrls,
-                'max_tokens' => 200,
+            return response()->json([
+                'success' => true,
+                'instruction' => $randomInstruction,
             ]);
-
-            // Cleanup temp files
-            foreach ($imageUrls as $url) {
-                $this->cleanupTempFile($url);
-            }
-
-            if ($response->successful()) {
-                $result = $response->json();
-                $suggestion = $result['output'] ?? $result['text'] ?? '';
-
-                // Clean up the suggestion
-                $suggestion = trim($suggestion);
-                if (empty($suggestion)) {
-                    $suggestion = $this->getDefaultInstruction(count($imageUrls));
-                }
-
-                return response()->json([
-                    'success' => true,
-                    'instruction' => $suggestion,
-                ]);
-            } else {
-                Log::error('Vision API error', ['body' => $response->body()]);
-                // Return default suggestion on error
-                return response()->json([
-                    'success' => true,
-                    'instruction' => $this->getDefaultInstruction(count($imageUrls)),
-                ]);
-            }
 
         } catch (\Exception $e) {
             Log::error('Generate instruction error:', ['error' => $e->getMessage()]);
             return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-                'instruction' => $this->getDefaultInstruction(2),
-            ], 500);
+                'success' => true,
+                'instruction' => 'Gabungkan semua elemen dari foto-foto ini menjadi satu komposisi yang harmonis dan menarik.',
+            ]);
         }
-    }
-
-    /**
-     * Get default instruction based on image count
-     */
-    private function getDefaultInstruction(int $imageCount): string
-    {
-        $suggestions = [
-            'Gabungkan semua elemen dari foto-foto ini menjadi satu komposisi yang harmonis dan menarik.',
-            'Buat kolase kreatif yang menggabungkan subjek utama dari setiap foto dengan transisi yang halus.',
-            'Kombinasikan foto-foto ini menjadi satu gambar dengan pencahayaan dan warna yang konsisten.',
-        ];
-        return $suggestions[array_rand($suggestions)];
     }
 
     /**
