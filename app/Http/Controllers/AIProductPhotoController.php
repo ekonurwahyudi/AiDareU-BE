@@ -105,7 +105,7 @@ class AIProductPhotoController extends Controller
                             Storage::disk('public')->put($path, $imageContent);
 
                             // Get full URL for the saved image (force HTTPS for production)
-                            $savedImageUrl = str_replace('http://', 'https://', url('storage/' . $path));
+                            $savedImageUrl = str_replace('http://', 'https://', url('api/storage/' . $path));
 
                             Log::info('Product photo URL generated', [
                                 'url' => $savedImageUrl,

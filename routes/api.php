@@ -418,6 +418,37 @@ Route::get('/theme-settings', [SettingTokoController::class, 'index']);
 // Public: Get store by subdomain with all data
 Route::get('/store/{subdomain}', [SettingTokoController::class, 'getStoreBySubdomain']);
 
+// Public: Storage files with CORS support
+Route::get('/storage/{path}', function ($path) {
+    try {
+        $path = urldecode($path);
+        
+        if (strpos($path, '..') !== false) {
+            abort(403, 'Forbidden');
+        }
+
+        if (!Storage::disk('public')->exists($path)) {
+            abort(404, 'File not found');
+        }
+
+        $fullPath = Storage::disk('public')->path($path);
+        $fileSize = filesize($fullPath);
+        $mimeType = mime_content_type($fullPath) ?: 'application/octet-stream';
+        $file = Storage::disk('public')->get($path);
+
+        return response($file, 200, [
+            'Content-Type' => $mimeType,
+            'Content-Length' => $fileSize,
+            'Cache-Control' => 'public, max-age=86400',
+            'Access-Control-Allow-Origin' => '*',
+            'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Content-Type, Accept',
+        ]);
+    } catch (\Exception $e) {
+        abort(500, 'Internal Server Error');
+    }
+})->where('path', '.*');
+
 // Public: AI Download Routes (no auth required - files are already public in storage)
 // These must be outside auth middleware to avoid CORS preflight issues
 Route::get('/ai/logo/download/{filename}', [AIController::class, 'downloadLogo']);

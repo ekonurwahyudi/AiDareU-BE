@@ -87,7 +87,7 @@ class AIController extends Controller
                                     Storage::disk('public')->put($path, $imageContent);
                                 }
 
-                                $savedImageUrl = str_replace('http://', 'https://', url('storage/' . $path));
+                                $savedImageUrl = str_replace('http://', 'https://', url('api/storage/' . $path));
 
                                 $logoResults[] = [
                                     'id' => (string) Str::uuid(),
