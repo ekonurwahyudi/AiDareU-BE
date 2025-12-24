@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Log;
 
-// CRITICAL: Storage route handler
+// CRITICAL: Storage route handler with CORS support
 // This closure will be used for storage routes below
 $storageHandler = function ($path) {
     try {
@@ -19,13 +19,6 @@ $storageHandler = function ($path) {
             \Log::warning('Directory traversal attempt', ['path' => $path]);
             abort(403, 'Forbidden');
         }
-
-        // Log the request for debugging
-        \Log::info('Storage request', [
-            'path' => $path,
-            'exists' => Storage::disk('public')->exists($path),
-            'full_path' => Storage::disk('public')->path($path)
-        ]);
 
         if (!Storage::disk('public')->exists($path)) {
             \Log::warning('Storage file not found', [
@@ -44,32 +37,50 @@ $storageHandler = function ($path) {
         // Get file content
         $file = Storage::disk('public')->get($path);
 
-        // Return response with proper headers
+        // CORS headers - allow all origins for public storage files
+        $origin = request()->header('Origin') ?: '*';
+
+        // Return response with CORS headers
         return Response::make($file, 200, [
             'Content-Type' => $mimeType,
             'Content-Length' => $fileSize,
-            'Cache-Control' => 'public, max-age=86400', // Cache for 24 hours
+            'Cache-Control' => 'public, max-age=86400',
+            'Access-Control-Allow-Origin' => $origin,
+            'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Content-Type, Accept, Authorization, X-Requested-With',
             'X-Content-Type-Options' => 'nosniff',
         ]);
     } catch (\Exception $e) {
         \Log::error('Storage handler error', [
             'path' => $path,
             'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
         ]);
         abort(500, 'Internal Server Error');
     }
 };
 
-// PRIORITY 1: Storage route - MUST be registered BEFORE any catch-all routes
+// OPTIONS handler for CORS preflight
+$optionsHandler = function () {
+    $origin = request()->header('Origin') ?: '*';
+    
+    return Response::make('', 204, [
+        'Access-Control-Allow-Origin' => $origin,
+        'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
+        'Access-Control-Allow-Headers' => 'Content-Type, Accept, Authorization, X-Requested-With',
+        'Access-Control-Max-Age' => '86400',
+    ]);
+};
+
+// PRIORITY 1: Storage routes - MUST be registered BEFORE any catch-all routes
 // Works on ALL domains (main domain, subdomains, custom domains)
 // Accessible at: https://api.aidareu.com/storage/{path}
-// CORS is handled by HandleCors middleware via config/cors.php
+Route::options('/storage/{path}', $optionsHandler)->where('path', '.*');
 Route::get('/storage/{path}', $storageHandler)->where('path', '.*');
 
 // Main domain routes (when no subdomain/custom domain)
-Route::domain(config('app.domain', 'localhost'))->group(function () use ($storageHandler) {
-    // Storage route for main domain
+Route::domain(config('app.domain', 'localhost'))->group(function () use ($storageHandler, $optionsHandler) {
+    // Storage routes for main domain
+    Route::options('/storage/{path}', $optionsHandler)->where('path', '.*');
     Route::get('/storage/{path}', $storageHandler)->where('path', '.*');
 
     Route::get('/', function () {
@@ -87,8 +98,9 @@ Route::domain(config('app.domain', 'localhost'))->group(function () use ($storag
 
 // Tenant routes (for subdomains and custom domains)
 // These will be handled by SubdomainMiddleware and CustomDomainMiddleware
-Route::middleware(['web'])->group(function () use ($storageHandler) {
-    // Storage route for tenant domains/subdomains - MUST be first in this group
+Route::middleware(['web'])->group(function () use ($storageHandler, $optionsHandler) {
+    // Storage routes for tenant domains/subdomains - MUST be first in this group
+    Route::options('/storage/{path}', $optionsHandler)->where('path', '.*');
     Route::get('/storage/{path}', $storageHandler)->where('path', '.*');
 
     // Home page for tenant
