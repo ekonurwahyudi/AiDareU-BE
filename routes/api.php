@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\AIController;
 use App\Http\Controllers\AIProductPhotoController;
 use App\Http\Controllers\AIMergePhotoController;
+use App\Http\Controllers\AIFashionPhotoController;
 
 // Health check endpoint for monitoring
 Route::get('/health', function () {
@@ -424,6 +425,7 @@ Route::get('/store/{subdomain}', [SettingTokoController::class, 'getStoreBySubdo
 Route::get('/ai/logo/download/{filename}', [AIController::class, 'downloadLogo']);
 Route::get('/ai/product-photo/download/{filename}', [AIProductPhotoController::class, 'downloadProductPhoto']);
 Route::get('/ai/merged-photo/download/{filename}', [AIMergePhotoController::class, 'downloadMergedPhoto']);
+Route::get('/ai/fashion-photo/download/{filename}', [AIFashionPhotoController::class, 'downloadFashionPhoto']);
 
 // Protected: Theme Settings Management
 // NOTE: OPTIONS preflight requests are handled by ForceJsonResponse middleware
@@ -452,5 +454,9 @@ Route::middleware(['auth:sanctum,web'])->group(function () {
         Route::get('/merge-photo/test', [AIMergePhotoController::class, 'testEndpoint']);
         Route::post('/generate-merged-photo', [AIMergePhotoController::class, 'generateMergedPhoto']);
         Route::post('/generate-instruction', [AIMergePhotoController::class, 'generateInstruction']);
+
+        // AI Fashion Photo Routes
+        Route::get('/fashion-photo/test', [AIFashionPhotoController::class, 'testEndpoint']);
+        Route::post('/generate-fashion-photo', [AIFashionPhotoController::class, 'generateFashionPhoto']);
     });
 });
