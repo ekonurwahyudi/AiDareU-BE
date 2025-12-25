@@ -47,16 +47,16 @@ class AIMergePhotoController extends Controller
                 Log::info('Image uploaded', ['url' => $imageUrl]);
             }
 
-            // Build prompt for merging
-            $prompt = $this->buildMergePrompt($instruction, count($imageUrls));
-
             $photoResults = [];
             $errors = [];
 
-            // Generate 2 variations using nano-banana edit
-            for ($i = 0; $i < 2; $i++) {
+            // Generate 4 variations using nano-banana edit (sesuai sulapfoto_rapih.txt yang generate 4 variasi)
+            for ($i = 0; $i <= 2; $i++) {
                 try {
-                    Log::info('Generating merge variation ' . ($i + 1) . ' with nano-banana');
+                    Log::info('Generating merge variation ' . $i . ' with nano-banana');
+
+                    // Build prompt dengan variation number (sesuai format sulapfoto_rapih.txt)
+                    $prompt = $this->buildMergePrompt($instruction, count($imageUrls), $aspectRatio, $i);
 
                     // Use nano-banana edit endpoint (same as product photo)
                     $response = Http::withHeaders([
@@ -74,7 +74,7 @@ class AIMergePhotoController extends Controller
 
                     if ($response->successful()) {
                         $result = $response->json();
-                        Log::info('nano-banana response for variation ' . ($i + 1), ['result' => $result]);
+                        Log::info('nano-banana response for variation ' . $i, ['result' => $result]);
 
                         if (isset($result['images']) && is_array($result['images']) && count($result['images']) > 0) {
                             $generatedImageUrl = $result['images'][0]['url'];
@@ -92,21 +92,23 @@ class AIMergePhotoController extends Controller
                                 'id' => (string) Str::uuid(),
                                 'imageUrl' => $savedImageUrl,
                                 'filename' => $filename,
-                                'prompt' => $prompt
+                                'prompt' => $prompt,
+                                'variation' => $i
                             ];
                         } else {
-                            $errors[] = 'No image in response for variation ' . ($i + 1);
+                            $errors[] = 'No image in response for variation ' . $i;
                         }
                     } else {
-                        $errorMsg = 'fal.ai error on variation ' . ($i + 1);
+                        $errorMsg = 'fal.ai error on variation ' . $i;
                         Log::error($errorMsg, ['status' => $response->status(), 'body' => $response->body()]);
                         $errors[] = $errorMsg . ': ' . $response->body();
                     }
 
-                    if ($i < 1) sleep(2);
+                    // Delay between requests to avoid rate limiting
+                    if ($i < 4) sleep(2);
                 } catch (\Exception $e) {
-                    Log::error('Error generating variation ' . ($i + 1), ['error' => $e->getMessage()]);
-                    $errors[] = 'Error variation ' . ($i + 1) . ': ' . $e->getMessage();
+                    Log::error('Error generating variation ' . $i, ['error' => $e->getMessage()]);
+                    $errors[] = 'Error variation ' . $i . ': ' . $e->getMessage();
                 }
             }
 
@@ -137,7 +139,9 @@ class AIMergePhotoController extends Controller
 
     /**
      * Generate instruction suggestion based on uploaded images
-     * For now returns creative suggestions - can be enhanced with vision model later
+     * Menggunakan format prompt dari sulapfoto_rapih.txt:
+     * "You are a creative assistant. Analyze the provided images and generate a short, creative prompt 
+     * in Indonesian that describes how to merge them into a single, cohesive new image."
      */
     public function generateInstruction(Request $request): JsonResponse
     {
@@ -149,15 +153,17 @@ class AIMergePhotoController extends Controller
 
             $imageCount = count($request->file('images'));
             
-            // Creative suggestions based on common use cases
+            // Creative suggestions based on sulapfoto_rapih.txt format
+            // Format: short, creative prompt in Indonesian that describes how to merge images
             $suggestions = [
-                'Gabungkan orang di foto pertama dengan produk di foto lainnya, buat seolah orang tersebut sedang memegang atau menggunakan produk.',
-                'Kombinasikan model/orang dengan background dari foto lain untuk membuat foto promosi yang menarik.',
-                'Gabungkan beberapa produk menjadi satu foto katalog dengan layout yang rapi dan profesional.',
-                'Buat foto before-after dengan menggabungkan kedua gambar secara side by side atau overlay.',
-                'Kombinasikan elemen-elemen dari setiap foto menjadi satu komposisi kreatif untuk konten sosial media.',
-                'Gabungkan foto produk dengan lifestyle scene untuk membuat foto iklan yang menarik.',
-                'Buat montase foto yang menggabungkan semua gambar dengan transisi yang halus dan artistik.',
+                'Gabungkan orang di foto pertama dengan produk di foto lainnya, seolah orang tersebut sedang memegang atau menggunakan produk dengan gaya foto profesional.',
+                'Kombinasikan model dengan background dari foto lain untuk membuat foto promosi yang menarik dengan pencahayaan yang konsisten.',
+                'Gabungkan beberapa produk menjadi satu foto katalog dengan layout yang rapi, profesional, dan estetik.',
+                'Buat komposisi kreatif dengan menggabungkan elemen-elemen dari setiap foto menjadi satu karya baru yang unik.',
+                'Gabungkan foto produk dengan lifestyle scene untuk membuat foto iklan yang menarik dan eye-catching.',
+                'Buat montase foto yang menggabungkan semua gambar dengan transisi yang halus dan artistik, gaya seni digital.',
+                'Kombinasikan subjek dari foto pertama dengan latar belakang dari foto kedua, dengan pencahayaan yang harmonis.',
+                'Gabungkan elemen-elemen terbaik dari setiap foto menjadi satu komposisi yang seamless dan profesional.',
             ];
             
             $randomInstruction = $suggestions[array_rand($suggestions)];
@@ -171,18 +177,20 @@ class AIMergePhotoController extends Controller
             Log::error('Generate instruction error:', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => true,
-                'instruction' => 'Gabungkan semua elemen dari foto-foto ini menjadi satu komposisi yang harmonis dan menarik.',
+                'instruction' => 'Gabungkan semua elemen dari foto-foto ini menjadi satu komposisi yang harmonis, kreatif, dan menarik dengan gaya profesional.',
             ]);
         }
     }
 
     /**
      * Build prompt for merging images
+     * Disesuaikan dengan format prompt dari sulapfoto_rapih.txt
      */
-    private function buildMergePrompt(string $instruction, int $imageCount): string
+    private function buildMergePrompt(string $instruction, int $imageCount, string $aspectRatio, int $variationNumber = 1): string
     {
-        return "Combine and merge these {$imageCount} images into one cohesive composition. "
-            . "Instructions: {$instruction}. "
+        // Format prompt sesuai dengan sulapfoto_rapih.txt:
+        // "${ggPromptInput.value.trim()}. The final image must have an aspect ratio of ${aspectRatio}. This is variation number ${id}."
+        return "{$instruction}. The final image must have an aspect ratio of {$aspectRatio}. This is variation number {$variationNumber}. "
             . "Create a seamless blend with consistent lighting, colors, and perspective. "
             . "Professional quality, high resolution, photorealistic result.";
     }
