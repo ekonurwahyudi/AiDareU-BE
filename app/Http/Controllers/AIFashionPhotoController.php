@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 class AIFashionPhotoController extends Controller
 {
     /**
-     * Generate fashion photo using fal.ai
+     * Generate fashion photo using fal.ai flux-2-lora-gallery/virtual-tryon
      */
     public function generateFashionPhoto(Request $request): JsonResponse
     {
@@ -36,53 +36,86 @@ class AIFashionPhotoController extends Controller
                 throw new \Exception('fal.ai API key belum dikonfigurasi.');
             }
 
-            // Upload clothing image
-            $clothingUrl = $this->uploadToTemporaryStorage($request->file('clothing_image'));
-            Log::info('Clothing image uploaded', ['url' => $clothingUrl]);
+            // Upload clothing/garment image
+            $garmentUrl = $this->uploadToTemporaryStorage($request->file('clothing_image'));
+            Log::info('Garment image uploaded', ['url' => $garmentUrl]);
 
-            // Upload custom model image if provided
-            $customModelUrl = null;
+            // Upload custom model/person image if provided
+            $personUrl = null;
             if ($request->input('model_type') === 'custom' && $request->hasFile('custom_model_image')) {
-                $customModelUrl = $this->uploadToTemporaryStorage($request->file('custom_model_image'));
-                Log::info('Custom model image uploaded', ['url' => $customModelUrl]);
+                $personUrl = $this->uploadToTemporaryStorage($request->file('custom_model_image'));
+                Log::info('Person image uploaded', ['url' => $personUrl]);
             }
-
-            // Build prompt
-            $prompt = $this->buildFashionPrompt($request->all());
-            Log::info('Fashion prompt built', ['prompt' => $prompt]);
 
             $photoResults = [];
             $errors = [];
+            $modelType = $request->input('model_type');
 
             // Generate 2 variations
             for ($i = 0; $i < 2; $i++) {
                 try {
                     Log::info('Generating fashion variation ' . ($i + 1));
 
-                    $imageUrls = [$clothingUrl];
-                    if ($customModelUrl) {
-                        $imageUrls[] = $customModelUrl;
-                    }
+                    // Use flux-2-lora-gallery/virtual-tryon for custom model with person image
+                    if ($modelType === 'custom' && $personUrl) {
+                        // Build prompt for virtual try-on
+                        $prompt = $this->buildVirtualTryOnPrompt($request->all());
+                        
+                        // Use flux-2-lora-gallery/virtual-tryon API
+                        // Format: image_urls = [person_image, garment_image]
+                        $response = Http::withHeaders([
+                            'Authorization' => 'Key ' . $apiKey,
+                            'Content-Type' => 'application/json',
+                        ])
+                        ->timeout(180)
+                        ->post('https://fal.run/fal-ai/flux-2-lora-gallery/virtual-tryon', [
+                            'image_urls' => [$personUrl, $garmentUrl],
+                            'prompt' => $prompt,
+                            'guidance_scale' => 2.5,
+                            'num_inference_steps' => 40,
+                            'acceleration' => 'regular',
+                            'output_format' => 'png',
+                            'num_images' => 1,
+                            'lora_scale' => 1,
+                            'seed' => rand(1, 999999), // Random seed for variation
+                            'enable_safety_checker' => true,
+                        ]);
 
-                    $response = Http::withHeaders([
-                        'Authorization' => 'Key ' . $apiKey,
-                        'Content-Type' => 'application/json',
-                    ])
-                    ->timeout(180)
-                    ->post('https://fal.run/fal-ai/nano-banana/edit', [
-                        'prompt' => $prompt,
-                        'image_urls' => $imageUrls,
-                        'num_images' => 1,
-                        'aspect_ratio' => $request->input('aspect_ratio'),
-                        'output_format' => 'png',
-                    ]);
+                        Log::info('Virtual try-on API called', [
+                            'person_url' => $personUrl,
+                            'garment_url' => $garmentUrl,
+                            'prompt' => $prompt
+                        ]);
+                    } else {
+                        // Use nano-banana for non-custom modes (manusia, manekin, tanpa_model)
+                        $prompt = $this->buildFashionPrompt($request->all());
+                        Log::info('Fashion prompt built', ['prompt' => $prompt]);
+
+                        $response = Http::withHeaders([
+                            'Authorization' => 'Key ' . $apiKey,
+                            'Content-Type' => 'application/json',
+                        ])
+                        ->timeout(180)
+                        ->post('https://fal.run/fal-ai/nano-banana/edit', [
+                            'prompt' => $prompt,
+                            'image_urls' => [$garmentUrl],
+                            'num_images' => 1,
+                            'aspect_ratio' => $request->input('aspect_ratio'),
+                            'output_format' => 'png',
+                        ]);
+                    }
 
                     if ($response->successful()) {
                         $result = $response->json();
                         Log::info('Fashion response for variation ' . ($i + 1), ['result' => $result]);
 
+                        // Handle response format - both APIs return images[].url
+                        $generatedImageUrl = null;
                         if (isset($result['images']) && is_array($result['images']) && count($result['images']) > 0) {
                             $generatedImageUrl = $result['images'][0]['url'];
+                        }
+
+                        if ($generatedImageUrl) {
                             $imageContent = file_get_contents($generatedImageUrl);
                             $filename = 'fashion-photo-' . Str::uuid() . '.png';
                             $path = 'ai-fashion-photos/' . $filename;
@@ -94,7 +127,7 @@ class AIFashionPhotoController extends Controller
                                 'id' => (string) Str::uuid(),
                                 'imageUrl' => $savedImageUrl,
                                 'filename' => $filename,
-                                'prompt' => $prompt
+                                'model' => $modelType === 'custom' ? 'virtual-tryon' : 'nano-banana'
                             ];
                         } else {
                             $errors[] = 'No image in response for variation ' . ($i + 1);
@@ -113,9 +146,9 @@ class AIFashionPhotoController extends Controller
             }
 
             // Cleanup temp files
-            $this->cleanupTempFile($clothingUrl);
-            if ($customModelUrl) {
-                $this->cleanupTempFile($customModelUrl);
+            $this->cleanupTempFile($garmentUrl);
+            if ($personUrl) {
+                $this->cleanupTempFile($personUrl);
             }
 
             if (empty($photoResults)) {
@@ -139,7 +172,41 @@ class AIFashionPhotoController extends Controller
     }
 
     /**
-     * Build prompt for fashion photo generation
+     * Build prompt for virtual try-on (flux-2-lora-gallery/virtual-tryon)
+     */
+    private function buildVirtualTryOnPrompt(array $data): string
+    {
+        $location = $data['location'];
+        $visualStyle = $data['visual_style'];
+        $additionalInstruction = $data['additional_instruction'] ?? '';
+
+        // Location text
+        $locationText = $location === 'indoor' ? 'indoor studio setting' : 'outdoor natural setting';
+
+        // Visual style mapping
+        $styleMap = [
+            'natural' => 'natural lighting with soft tones',
+            'minimalis' => 'minimalist studio with clean background',
+            'sunset' => 'golden hour sunset lighting with warm tones',
+            'urban' => 'urban street style with city background',
+            'elegan' => 'elegant sophisticated luxury feel'
+        ];
+        $styleText = $styleMap[$visualStyle] ?? $visualStyle;
+
+        // Build virtual try-on prompt
+        $prompt = "Virtual try-on of the clothing on the person, professional fashion photoshoot, "
+            . "{$locationText}, {$styleText}, high quality, photorealistic, detailed";
+
+        // Add additional instructions if provided
+        if ($additionalInstruction) {
+            $prompt .= ", {$additionalInstruction}";
+        }
+
+        return $prompt;
+    }
+
+    /**
+     * Build prompt for fashion photo generation (for non-virtual-tryon modes)
      * Based on sulapfoto fashion photoshoot prompt structure
      */
     private function buildFashionPrompt(array $data): string
@@ -162,48 +229,35 @@ class AIFashionPhotoController extends Controller
         ];
         $styleText = $styleMap[$visualStyle] ?? $visualStyle;
 
-        $prompt = '';
+        // Standard fashion photoshoot
+        $prompt = "Create a professional fashion photoshoot. The main subject is the clothing from the provided image.";
 
-        // Build prompt based on model type (following sulapfoto structure)
-        if ($modelType === 'custom') {
-            // Virtual try-on mode with custom model
-            $prompt = "Perform a virtual try-on. You are given two primary images: an article of clothing and a person. "
-                . "Your task is to realistically place the clothing onto the person. "
-                . "CRITICAL INSTRUCTIONS: "
-                . "1. The final image MUST feature the person from the second image, preserving their exact face, body, and pose. "
-                . "2. The clothing from the first image must be transferred onto the person, fitting them naturally and realistically. "
-                . "3. The background should be a {$locationText} setting with a '{$styleText}' visual style, suitable for a professional photoshoot.";
-        } else {
-            // Standard fashion photoshoot
-            $prompt = "Create a professional fashion photoshoot. The main subject is the clothing from the provided image.";
+        if ($modelType === 'manusia' || $modelType === 'manekin') {
+            $gender = $data['gender'] ?? 'pria';
+            $age = $data['age'] ?? 'dewasa';
+            
+            $genderText = $gender === 'pria' ? 'male' : 'female';
+            $ageMap = [
+                'bayi' => 'baby',
+                'anak' => 'child',
+                'remaja' => 'teenager',
+                'dewasa' => 'adult',
+                'orang_tua' => 'middle-aged adult',
+                'kakek_nenek' => 'elderly'
+            ];
+            $ageText = $ageMap[$age] ?? 'adult';
 
-            if ($modelType === 'manusia' || $modelType === 'manekin') {
-                $gender = $data['gender'] ?? 'pria';
-                $age = $data['age'] ?? 'dewasa';
-                
-                $genderText = $gender === 'pria' ? 'male' : 'female';
-                $ageMap = [
-                    'bayi' => 'baby',
-                    'anak' => 'child',
-                    'remaja' => 'teenager',
-                    'dewasa' => 'adult',
-                    'orang_tua' => 'middle-aged adult',
-                    'kakek_nenek' => 'elderly'
-                ];
-                $ageText = $ageMap[$age] ?? 'adult';
-
-                if ($modelType === 'manusia') {
-                    $prompt .= " The clothing is worn by a photorealistic human model. The model is a {$genderText}, with an age appearance of '{$ageText}'.";
-                } else {
-                    $prompt .= " The clothing is displayed on a full-body, posable {$genderText} mannequin. The mannequin must be complete with a head (can be abstract or featureless), arms, and legs, and should be standing in a realistic, dynamic fashion model pose.";
-                }
+            if ($modelType === 'manusia') {
+                $prompt .= " The clothing is worn by a photorealistic human model. The model is a {$genderText}, with an age appearance of '{$ageText}'.";
             } else {
-                // tanpa_model - flat lay
-                $prompt .= " The clothing is presented as a 'flat lay' or on a hanger against a clean background, with no model or mannequin visible.";
+                $prompt .= " The clothing is displayed on a full-body, posable {$genderText} mannequin. The mannequin must be complete with a head (can be abstract or featureless), arms, and legs, and should be standing in a realistic, dynamic fashion model pose.";
             }
-
-            $prompt .= " The setting is a {$locationText} environment. The overall visual style and lighting should be '{$styleText}'.";
+        } else {
+            // tanpa_model - flat lay
+            $prompt .= " The clothing is presented as a 'flat lay' or on a hanger against a clean background, with no model or mannequin visible.";
         }
+
+        $prompt .= " The setting is a {$locationText} environment. The overall visual style and lighting should be '{$styleText}'.";
 
         // Add additional instructions if provided
         if ($additionalInstruction) {

@@ -51,7 +51,7 @@ class AIMergePhotoController extends Controller
             $errors = [];
 
             // Generate 4 variations using nano-banana edit (sesuai sulapfoto_rapih.txt yang generate 4 variasi)
-            for ($i = 0; $i <= 2; $i++) {
+            for ($i = 1; $i <= 2; $i++) {
                 try {
                     Log::info('Generating merge variation ' . $i . ' with nano-banana');
 
