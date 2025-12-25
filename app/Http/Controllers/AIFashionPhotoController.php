@@ -140,6 +140,7 @@ class AIFashionPhotoController extends Controller
 
     /**
      * Build prompt for fashion photo generation
+     * Based on sulapfoto fashion photoshoot prompt structure
      */
     private function buildFashionPrompt(array $data): string
     {
@@ -148,56 +149,69 @@ class AIFashionPhotoController extends Controller
         $visualStyle = $data['visual_style'];
         $additionalInstruction = $data['additional_instruction'] ?? '';
 
-        // Model description
-        $modelDesc = '';
-        switch ($modelType) {
-            case 'manusia':
+        // Location text
+        $locationText = $location === 'indoor' ? 'indoor studio' : 'outdoor natural';
+
+        // Visual style mapping
+        $styleMap = [
+            'natural' => 'Natural lighting with soft tones',
+            'minimalis' => 'Studio Minimalis with clean background',
+            'sunset' => 'Golden hour sunset lighting with warm tones',
+            'urban' => 'Urban street style with city background',
+            'elegan' => 'Elegant sophisticated luxury feel'
+        ];
+        $styleText = $styleMap[$visualStyle] ?? $visualStyle;
+
+        $prompt = '';
+
+        // Build prompt based on model type (following sulapfoto structure)
+        if ($modelType === 'custom') {
+            // Virtual try-on mode with custom model
+            $prompt = "Perform a virtual try-on. You are given two primary images: an article of clothing and a person. "
+                . "Your task is to realistically place the clothing onto the person. "
+                . "CRITICAL INSTRUCTIONS: "
+                . "1. The final image MUST feature the person from the second image, preserving their exact face, body, and pose. "
+                . "2. The clothing from the first image must be transferred onto the person, fitting them naturally and realistically. "
+                . "3. The background should be a {$locationText} setting with a '{$styleText}' visual style, suitable for a professional photoshoot.";
+        } else {
+            // Standard fashion photoshoot
+            $prompt = "Create a professional fashion photoshoot. The main subject is the clothing from the provided image.";
+
+            if ($modelType === 'manusia' || $modelType === 'manekin') {
                 $gender = $data['gender'] ?? 'pria';
                 $age = $data['age'] ?? 'dewasa';
+                
                 $genderText = $gender === 'pria' ? 'male' : 'female';
                 $ageMap = [
                     'bayi' => 'baby',
                     'anak' => 'child',
                     'remaja' => 'teenager',
                     'dewasa' => 'adult',
-                    'orang_tua' => 'middle-aged',
+                    'orang_tua' => 'middle-aged adult',
                     'kakek_nenek' => 'elderly'
                 ];
                 $ageText = $ageMap[$age] ?? 'adult';
-                $modelDesc = "Professional fashion photo with {$ageText} {$genderText} model wearing the clothing";
-                break;
-            case 'manekin':
-                $gender = $data['gender'] ?? 'pria';
-                $genderText = $gender === 'pria' ? 'male' : 'female';
-                $modelDesc = "Fashion photo with {$genderText} mannequin displaying the clothing";
-                break;
-            case 'tanpa_model':
-                $modelDesc = "Flat lay fashion photo of the clothing, no model, product photography style";
-                break;
-            case 'custom':
-                $modelDesc = "Fashion photo with the provided model wearing the clothing from the first image";
-                break;
+
+                if ($modelType === 'manusia') {
+                    $prompt .= " The clothing is worn by a photorealistic human model. The model is a {$genderText}, with an age appearance of '{$ageText}'.";
+                } else {
+                    $prompt .= " The clothing is displayed on a full-body, posable {$genderText} mannequin. The mannequin must be complete with a head (can be abstract or featureless), arms, and legs, and should be standing in a realistic, dynamic fashion model pose.";
+                }
+            } else {
+                // tanpa_model - flat lay
+                $prompt .= " The clothing is presented as a 'flat lay' or on a hanger against a clean background, with no model or mannequin visible.";
+            }
+
+            $prompt .= " The setting is a {$locationText} environment. The overall visual style and lighting should be '{$styleText}'.";
         }
 
-        // Location
-        $locationText = $location === 'indoor' ? 'indoor studio setting' : 'outdoor natural environment';
-
-        // Visual style
-        $styleMap = [
-            'natural' => 'natural lighting, soft tones',
-            'minimalis' => 'minimalist clean background, simple composition',
-            'sunset' => 'golden hour sunset lighting, warm tones',
-            'urban' => 'urban street style, city background',
-            'elegan' => 'elegant sophisticated look, luxury feel'
-        ];
-        $styleText = $styleMap[$visualStyle] ?? $visualStyle;
-
-        $prompt = "{$modelDesc}. {$locationText}. Style: {$styleText}. "
-            . "High quality fashion photography, professional lighting, sharp details. ";
-
+        // Add additional instructions if provided
         if ($additionalInstruction) {
-            $prompt .= "Additional: {$additionalInstruction}. ";
+            $prompt .= " Additional user instructions: \"{$additionalInstruction}\".";
         }
+
+        // Add variation and quality instructions
+        $prompt .= " Create a slightly different pose or angle to provide variety. The final image must be high-resolution, sharp, and photorealistic.";
 
         return $prompt;
     }
