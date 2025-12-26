@@ -139,9 +139,8 @@ class AIMergePhotoController extends Controller
 
     /**
      * Generate instruction suggestion based on uploaded images
-     * Menggunakan format prompt dari sulapfoto_rapih.txt:
-     * "You are a creative assistant. Analyze the provided images and generate a short, creative prompt 
-     * in Indonesian that describes how to merge them into a single, cohesive new image."
+     * Menggunakan fal.ai dengan Google Gemini untuk analisis gambar dan generate instruksi kreatif
+     * Sesuai dengan sulapfoto_rapih.txt
      */
     public function generateInstruction(Request $request): JsonResponse
     {
@@ -151,35 +150,116 @@ class AIMergePhotoController extends Controller
                 'images.*' => 'required|image|max:10240',
             ]);
 
-            $imageCount = count($request->file('images'));
-            
-            // Creative suggestions based on sulapfoto_rapih.txt format
-            // Format: short, creative prompt in Indonesian that describes how to merge images
-            $suggestions = [
-                'Gabungkan orang di foto pertama dengan produk di foto lainnya, seolah orang tersebut sedang memegang atau menggunakan produk dengan gaya foto profesional.',
-                'Kombinasikan model dengan background dari foto lain untuk membuat foto promosi yang menarik dengan pencahayaan yang konsisten.',
-                'Gabungkan beberapa produk menjadi satu foto katalog dengan layout yang rapi, profesional, dan estetik.',
-                'Buat komposisi kreatif dengan menggabungkan elemen-elemen dari setiap foto menjadi satu karya baru yang unik.',
-                'Gabungkan foto produk dengan lifestyle scene untuk membuat foto iklan yang menarik dan eye-catching.',
-                'Buat montase foto yang menggabungkan semua gambar dengan transisi yang halus dan artistik, gaya seni digital.',
-                'Kombinasikan subjek dari foto pertama dengan latar belakang dari foto kedua, dengan pencahayaan yang harmonis.',
-                'Gabungkan elemen-elemen terbaik dari setiap foto menjadi satu komposisi yang seamless dan profesional.',
-            ];
-            
-            $randomInstruction = $suggestions[array_rand($suggestions)];
+            // Get fal.ai API key
+            $apiKey = env('FAL_API_KEY');
+            if (!$apiKey || trim($apiKey) === '') {
+                Log::warning('FAL_API_KEY not configured, using fallback');
+                return $this->getFallbackInstruction();
+            }
 
-            return response()->json([
-                'success' => true,
-                'instruction' => $randomInstruction,
+            // Upload images to temporary storage untuk fal.ai
+            $imageUrls = [];
+            foreach ($request->file('images') as $uploadedFile) {
+                $imageUrl = $this->uploadToTemporaryStorage($uploadedFile);
+                $imageUrls[] = $imageUrl;
+            }
+
+            // System prompt PERSIS seperti di sulapfoto_rapih.txt
+            $systemPrompt = "You are a creative assistant. Analyze the provided images and generate a short, creative prompt in Indonesian that describes how to merge them into a single, cohesive new image. Describe the desired style and subject matter. For example, if you see a cat and an astronaut, you could suggest: \"Seekor kucing lucu sebagai astronot, mengambang di luar angkasa dengan latar belakang nebula berwarna-warni, gaya seni digital.\". Respond ONLY with the prompt text itself, without any introductory phrases.";
+
+            $userPrompt = "Buatkan instruksi untuk menggabungkan gambar-gambar ini:";
+
+            Log::info('Calling fal.ai Gemini for instruction generation', [
+                'image_count' => count($imageUrls),
+                'image_urls' => $imageUrls
             ]);
+
+            // Call fal.ai dengan Google Gemini Flash model
+            $response = Http::withHeaders([
+                'Authorization' => 'Key ' . $apiKey,
+                'Content-Type' => 'application/json',
+            ])
+            ->timeout(60)
+            ->post('https://fal.run/fal-ai/google/gemini-flash-2.0', [
+                'prompt' => $userPrompt,
+                'system_prompt' => $systemPrompt,
+                'image_urls' => $imageUrls,
+            ]);
+
+            // Cleanup temp files setelah API call
+            foreach ($imageUrls as $url) {
+                $this->cleanupTempFile($url);
+            }
+
+            if ($response->successful()) {
+                $result = $response->json();
+                
+                Log::info('fal.ai Gemini response received', ['result' => $result]);
+                
+                // Extract text from response
+                $instruction = null;
+                
+                if (isset($result['output'])) {
+                    $instruction = trim($result['output']);
+                } elseif (isset($result['text'])) {
+                    $instruction = trim($result['text']);
+                } elseif (isset($result['response'])) {
+                    $instruction = trim($result['response']);
+                } elseif (isset($result['content'])) {
+                    $instruction = trim($result['content']);
+                }
+                
+                if ($instruction) {
+                    // Clean up instruction - remove quotes if present
+                    $instruction = trim($instruction, '"\'');
+                    
+                    Log::info('AI generated instruction successfully', ['instruction' => $instruction]);
+                    
+                    return response()->json([
+                        'success' => true,
+                        'instruction' => $instruction,
+                        'source' => 'fal_ai_gemini'
+                    ]);
+                }
+            }
+
+            // Log error details
+            Log::warning('fal.ai Gemini API failed', [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+            
+            return $this->getFallbackInstruction();
 
         } catch (\Exception $e) {
             Log::error('Generate instruction error:', ['error' => $e->getMessage()]);
-            return response()->json([
-                'success' => true,
-                'instruction' => 'Gabungkan semua elemen dari foto-foto ini menjadi satu komposisi yang harmonis, kreatif, dan menarik dengan gaya profesional.',
-            ]);
+            return $this->getFallbackInstruction();
         }
+    }
+
+    /**
+     * Fallback instruction when fal.ai Gemini API is not available
+     */
+    private function getFallbackInstruction(): JsonResponse
+    {
+        $suggestions = [
+            'Gabungkan orang di foto pertama dengan produk di foto lainnya, seolah orang tersebut sedang memegang atau menggunakan produk dengan gaya foto profesional dan pencahayaan yang natural.',
+            'Kombinasikan model dengan background dari foto lain untuk membuat foto promosi yang menarik dengan pencahayaan yang konsisten dan atmosfer yang harmonis.',
+            'Gabungkan beberapa produk menjadi satu foto katalog dengan layout yang rapi, profesional, dan estetik dengan latar belakang yang bersih.',
+            'Buat komposisi kreatif dengan menggabungkan elemen-elemen dari setiap foto menjadi satu karya baru yang unik dengan gaya seni digital yang modern.',
+            'Gabungkan foto produk dengan lifestyle scene untuk membuat foto iklan yang menarik dan eye-catching dengan nuansa yang warm dan inviting.',
+            'Buat montase foto yang menggabungkan semua gambar dengan transisi yang halus dan artistik, menggunakan gaya seni digital yang contemporary.',
+            'Kombinasikan subjek dari foto pertama dengan latar belakang dari foto kedua, dengan pencahayaan yang harmonis dan perspektif yang natural.',
+            'Gabungkan elemen-elemen terbaik dari setiap foto menjadi satu komposisi yang seamless dan profesional dengan kualitas high-end.',
+        ];
+        
+        $randomInstruction = $suggestions[array_rand($suggestions)];
+
+        return response()->json([
+            'success' => true,
+            'instruction' => $randomInstruction,
+            'source' => 'fallback'
+        ]);
     }
 
     /**
