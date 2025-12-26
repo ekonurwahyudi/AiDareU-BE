@@ -139,7 +139,7 @@ class AIMergePhotoController extends Controller
 
     /**
      * Generate instruction suggestion based on uploaded images
-     * Menggunakan fal.ai dengan Gemini 2.5 Flash untuk analisis gambar dan generate instruksi kreatif
+     * Menggunakan fal.ai dengan Gemini 2 Flash untuk analisis gambar dan generate instruksi kreatif (TEXT only)
      * Sesuai dengan sulapfoto_rapih.txt
      */
     public function generateInstruction(Request $request): JsonResponse
@@ -168,23 +168,23 @@ class AIMergePhotoController extends Controller
             // Sesuai dengan sulapfoto_rapih.txt
             $prompt = "You are a creative assistant. Analyze these images and generate a short, creative prompt in Indonesian that describes how to merge them into a single, cohesive new image. Describe the desired style and subject matter. For example, if you see a cat and an astronaut, you could suggest: 'Seekor kucing lucu sebagai astronot, mengambang di luar angkasa dengan latar belakang nebula berwarna-warni, gaya seni digital.'. Respond ONLY with the prompt text itself in Indonesian, without any introductory phrases. Buatkan instruksi untuk menggabungkan gambar-gambar ini:";
 
-            Log::info('Calling fal.ai Gemini 2.5 Flash for instruction generation', [
+            Log::info('Calling fal.ai Gemini 2 Flash for instruction generation (text only)', [
                 'image_count' => count($imageUrls),
                 'image_urls' => $imageUrls
             ]);
 
-            // Call fal.ai dengan Gemini 2.5 Flash Image model
+            // Call fal.ai dengan Gemini 2 Flash model (TEXT/VISION model, bukan image generation)
             $response = Http::withHeaders([
                 'Authorization' => 'Key ' . $apiKey,
                 'Content-Type' => 'application/json',
             ])
             ->timeout(90)
-            ->post('https://fal.run/fal-ai/gemini-25-flash-image', [
+            ->post('https://fal.run/fal-ai/gemini-2-flash', [
                 'prompt' => $prompt,
                 'image_urls' => $imageUrls,
             ]);
 
-            Log::info('fal.ai Gemini 2.5 Flash raw response', [
+            Log::info('fal.ai Gemini 2 Flash raw response', [
                 'status' => $response->status(),
                 'body' => $response->body()
             ]);
@@ -197,7 +197,7 @@ class AIMergePhotoController extends Controller
             if ($response->successful()) {
                 $result = $response->json();
                 
-                Log::info('fal.ai Gemini 2.5 Flash response parsed', ['result' => $result]);
+                Log::info('fal.ai Gemini 2 Flash response parsed', ['result' => $result]);
                 
                 // Extract text from response - check multiple possible fields
                 $instruction = null;
@@ -231,7 +231,7 @@ class AIMergePhotoController extends Controller
             }
 
             // Log error details
-            Log::warning('fal.ai Gemini 2.5 Flash API failed or empty response', [
+            Log::warning('fal.ai Gemini 2 Flash API failed or empty response', [
                 'status' => $response->status(),
                 'body' => $response->body()
             ]);
