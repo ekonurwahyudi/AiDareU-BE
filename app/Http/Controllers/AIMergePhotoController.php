@@ -139,7 +139,7 @@ class AIMergePhotoController extends Controller
 
     /**
      * Generate instruction suggestion based on uploaded images
-     * Menggunakan fal.ai dengan Google Gemini untuk analisis gambar dan generate instruksi kreatif
+     * Menggunakan fal.ai dengan Gemini 2.5 Flash untuk analisis gambar dan generate instruksi kreatif
      * Sesuai dengan sulapfoto_rapih.txt
      */
     public function generateInstruction(Request $request): JsonResponse
@@ -164,26 +164,29 @@ class AIMergePhotoController extends Controller
                 $imageUrls[] = $imageUrl;
             }
 
-            // System prompt PERSIS seperti di sulapfoto_rapih.txt
-            $systemPrompt = "You are a creative assistant. Analyze the provided images and generate a short, creative prompt in Indonesian that describes how to merge them into a single, cohesive new image. Describe the desired style and subject matter. For example, if you see a cat and an astronaut, you could suggest: \"Seekor kucing lucu sebagai astronot, mengambang di luar angkasa dengan latar belakang nebula berwarna-warni, gaya seni digital.\". Respond ONLY with the prompt text itself, without any introductory phrases.";
+            // Prompt untuk analisis gambar dan generate instruksi kreatif
+            // Sesuai dengan sulapfoto_rapih.txt
+            $prompt = "You are a creative assistant. Analyze these images and generate a short, creative prompt in Indonesian that describes how to merge them into a single, cohesive new image. Describe the desired style and subject matter. For example, if you see a cat and an astronaut, you could suggest: 'Seekor kucing lucu sebagai astronot, mengambang di luar angkasa dengan latar belakang nebula berwarna-warni, gaya seni digital.'. Respond ONLY with the prompt text itself in Indonesian, without any introductory phrases. Buatkan instruksi untuk menggabungkan gambar-gambar ini:";
 
-            $userPrompt = "Buatkan instruksi untuk menggabungkan gambar-gambar ini:";
-
-            Log::info('Calling fal.ai Gemini for instruction generation', [
+            Log::info('Calling fal.ai Gemini 2.5 Flash for instruction generation', [
                 'image_count' => count($imageUrls),
                 'image_urls' => $imageUrls
             ]);
 
-            // Call fal.ai dengan Google Gemini Flash model
+            // Call fal.ai dengan Gemini 2.5 Flash Image model
             $response = Http::withHeaders([
                 'Authorization' => 'Key ' . $apiKey,
                 'Content-Type' => 'application/json',
             ])
-            ->timeout(60)
-            ->post('https://fal.run/fal-ai/google/gemini-flash-2.0', [
-                'prompt' => $userPrompt,
-                'system_prompt' => $systemPrompt,
+            ->timeout(90)
+            ->post('https://fal.run/fal-ai/gemini-25-flash-image', [
+                'prompt' => $prompt,
                 'image_urls' => $imageUrls,
+            ]);
+
+            Log::info('fal.ai Gemini 2.5 Flash raw response', [
+                'status' => $response->status(),
+                'body' => $response->body()
             ]);
 
             // Cleanup temp files setelah API call
@@ -194,9 +197,9 @@ class AIMergePhotoController extends Controller
             if ($response->successful()) {
                 $result = $response->json();
                 
-                Log::info('fal.ai Gemini response received', ['result' => $result]);
+                Log::info('fal.ai Gemini 2.5 Flash response parsed', ['result' => $result]);
                 
-                // Extract text from response
+                // Extract text from response - check multiple possible fields
                 $instruction = null;
                 
                 if (isset($result['output'])) {
@@ -207,9 +210,13 @@ class AIMergePhotoController extends Controller
                     $instruction = trim($result['response']);
                 } elseif (isset($result['content'])) {
                     $instruction = trim($result['content']);
+                } elseif (isset($result['result'])) {
+                    $instruction = trim($result['result']);
+                } elseif (isset($result['message'])) {
+                    $instruction = trim($result['message']);
                 }
                 
-                if ($instruction) {
+                if ($instruction && strlen($instruction) > 10) {
                     // Clean up instruction - remove quotes if present
                     $instruction = trim($instruction, '"\'');
                     
@@ -224,7 +231,7 @@ class AIMergePhotoController extends Controller
             }
 
             // Log error details
-            Log::warning('fal.ai Gemini API failed', [
+            Log::warning('fal.ai Gemini 2.5 Flash API failed or empty response', [
                 'status' => $response->status(),
                 'body' => $response->body()
             ]);
@@ -232,7 +239,7 @@ class AIMergePhotoController extends Controller
             return $this->getFallbackInstruction();
 
         } catch (\Exception $e) {
-            Log::error('Generate instruction error:', ['error' => $e->getMessage()]);
+            Log::error('Generate instruction error:', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             return $this->getFallbackInstruction();
         }
     }
