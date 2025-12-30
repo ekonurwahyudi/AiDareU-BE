@@ -25,6 +25,7 @@ use App\Http\Controllers\AIController;
 use App\Http\Controllers\AIProductPhotoController;
 use App\Http\Controllers\AIMergePhotoController;
 use App\Http\Controllers\AIFashionPhotoController;
+use App\Http\Controllers\CoinTransactionController;
 
 // Health check endpoint for monitoring
 Route::get('/health', function () {
@@ -458,5 +459,13 @@ Route::middleware(['auth:sanctum,web'])->group(function () {
         // AI Fashion Photo Routes
         Route::get('/fashion-photo/test', [AIFashionPhotoController::class, 'testEndpoint']);
         Route::post('/generate-fashion-photo', [AIFashionPhotoController::class, 'generateFashionPhoto']);
+    });
+
+    // Coin Transaction Routes (protected - require auth)
+    Route::prefix('coins')->group(function () {
+        Route::get('/', [CoinTransactionController::class, 'index']);
+        Route::get('/summary', [CoinTransactionController::class, 'summary']);
+        Route::post('/', [CoinTransactionController::class, 'store']);
+        Route::get('/export', [CoinTransactionController::class, 'export']);
     });
 });
