@@ -45,9 +45,9 @@ class CoinTransactionController extends Controller
                 );
             }
 
-            // Filter by search (keterangan)
+            // Filter by search (keterangan) - case insensitive
             if ($request->filled('search')) {
-                $query->where('keterangan', 'like', '%' . $request->search . '%');
+                $query->whereRaw('LOWER(keterangan) LIKE ?', ['%' . strtolower($request->search) . '%']);
             }
 
             // Pagination
