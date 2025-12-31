@@ -300,6 +300,8 @@ class AuthController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'phone' => $user->phone,
+                'paket' => $user->paket ?? 'Freemium',
+                'image' => $user->avatar,
                 'roles' => $user->getRoleNames(),
                 'store' => $store ? [
                     'uuid' => $store->uuid,
@@ -511,7 +513,7 @@ class AuthController extends Controller
     {
         try {
             $user = $request->user();
-            
+
             return response()->json([
                 'user' => [
                     'id' => $user->id,
@@ -519,6 +521,8 @@ class AuthController extends Controller
                     'name' => $user->name,
                     'email' => $user->email,
                     'phone' => $user->phone,
+                    'paket' => $user->paket ?? 'Freemium',
+                    'image' => $user->avatar,
                     'email_verified_at' => $user->email_verified_at,
                     'roles' => $user->getRoleNames(),
                     'permissions' => $user->getAllPermissions()->pluck('name')
