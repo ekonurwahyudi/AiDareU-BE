@@ -468,4 +468,12 @@ Route::middleware(['auth:sanctum,web'])->group(function () {
         Route::post('/', [CoinTransactionController::class, 'store']);
         Route::get('/export', [CoinTransactionController::class, 'export']);
     });
+
+    // AI Generation History Routes (protected - require auth)
+    Route::prefix('ai-history')->group(function () {
+        Route::get('/', [\App\Http\Controllers\AiGenerationHistoryController::class, 'index']);
+        Route::get('/check-coin', [\App\Http\Controllers\AiGenerationHistoryController::class, 'checkCoin']);
+        Route::post('/', [\App\Http\Controllers\AiGenerationHistoryController::class, 'store']);
+        Route::delete('/{id}', [\App\Http\Controllers\AiGenerationHistoryController::class, 'destroy']);
+    });
 });

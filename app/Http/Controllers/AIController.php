@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AiGenerationHistory;
+use App\Models\CoinTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -27,6 +31,37 @@ class AIController extends Controller
                 'style' => 'required|string|in:modern,simple,creative,minimalist,professional,playful,elegant,bold',
                 'image' => 'nullable|image|max:5120'
             ]);
+
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 401);
+            }
+
+            // Check coin balance BEFORE generating
+            $coinSummary = CoinTransaction::forUser($user->uuid)
+                ->select(
+                    DB::raw('SUM(coin_masuk) as total_coin_masuk'),
+                    DB::raw('SUM(coin_keluar) as total_coin_keluar')
+                )
+                ->first();
+
+            $totalCoinMasuk = $coinSummary->total_coin_masuk ?? 0;
+            $totalCoinKeluar = $coinSummary->total_coin_keluar ?? 0;
+            $coinSaatIni = $totalCoinMasuk - $totalCoinKeluar;
+
+            $requiredCoin = 4; // 2 variations x 2 coin each
+
+            if ($coinSaatIni < $requiredCoin) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Coin tidak cukup! Anda memiliki {$coinSaatIni} Pts, membutuhkan {$requiredCoin} Pts untuk generate 2 logo.",
+                    'current_coin' => $coinSaatIni,
+                    'required_coin' => $requiredCoin,
+                ], 400);
+            }
 
             $businessName = $request->input('business_name');
             $prompt = $request->input('prompt');
@@ -116,11 +151,47 @@ class AIController extends Controller
                 throw new \Exception('Failed to generate logos. ' . implode('; ', $errors));
             }
 
+            // Save to history and deduct coin using DB transaction
+            DB::beginTransaction();
+            try {
+                foreach ($logoResults as $logo) {
+                    // Save history
+                    AiGenerationHistory::create([
+                        'uuid_user' => $user->uuid,
+                        'keterangan' => "Generate AI Logo - {$businessName}",
+                        'hasil_generated' => $logo['imageUrl'],
+                        'coin_used' => 2,
+                    ]);
+
+                    // Deduct coin
+                    CoinTransaction::create([
+                        'uuid_user' => $user->uuid,
+                        'keterangan' => "Generate AI Logo - {$businessName}",
+                        'coin_masuk' => 0,
+                        'coin_keluar' => 2,
+                        'status' => 'berhasil',
+                    ]);
+                }
+
+                DB::commit();
+                Log::info('History saved and coins deducted successfully', [
+                    'user_uuid' => $user->uuid,
+                    'logos_count' => count($logoResults),
+                    'total_coin_used' => count($logoResults) * 2
+                ]);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error('Error saving history/deducting coin:', ['error' => $e->getMessage()]);
+                // Continue anyway, logos were generated successfully
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => 'Logos generated successfully',
+                'message' => 'Logos generated successfully. ' . (count($logoResults) * 2) . ' Pts deducted.',
                 'data' => $logoResults,
-                'errors' => $errors
+                'errors' => $errors,
+                'coin_deducted' => count($logoResults) * 2
             ]);
 
         } catch (\Exception $e) {
