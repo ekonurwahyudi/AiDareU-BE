@@ -52,7 +52,7 @@ class AIController extends Controller
             $totalCoinKeluar = $coinSummary->total_coin_keluar ?? 0;
             $coinSaatIni = $totalCoinMasuk - $totalCoinKeluar;
 
-            $requiredCoin = 4; // 2 variations x 2 coin each
+            $requiredCoin = 2; // 2 variations x 1 coin each
 
             if ($coinSaatIni < $requiredCoin) {
                 return response()->json([
@@ -60,6 +60,7 @@ class AIController extends Controller
                     'message' => "Coin tidak cukup! Anda memiliki {$coinSaatIni} Pts, membutuhkan {$requiredCoin} Pts untuk generate 2 logo.",
                     'current_coin' => $coinSaatIni,
                     'required_coin' => $requiredCoin,
+                    'insufficient_coin' => true
                 ], 400);
             }
 
@@ -160,7 +161,7 @@ class AIController extends Controller
                         'uuid_user' => $user->uuid,
                         'keterangan' => "Generate AI Logo - {$businessName}",
                         'hasil_generated' => $logo['imageUrl'],
-                        'coin_used' => 2,
+                        'coin_used' => 1,
                     ]);
 
                     // Deduct coin
@@ -168,7 +169,7 @@ class AIController extends Controller
                         'uuid_user' => $user->uuid,
                         'keterangan' => "Generate AI Logo - {$businessName}",
                         'coin_masuk' => 0,
-                        'coin_keluar' => 2,
+                        'coin_keluar' => 1,
                         'status' => 'berhasil',
                     ]);
                 }
@@ -177,7 +178,7 @@ class AIController extends Controller
                 Log::info('History saved and coins deducted successfully', [
                     'user_uuid' => $user->uuid,
                     'logos_count' => count($logoResults),
-                    'total_coin_used' => count($logoResults) * 2
+                    'total_coin_used' => count($logoResults) * 1
                 ]);
 
             } catch (\Exception $e) {
@@ -188,10 +189,10 @@ class AIController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Logos generated successfully. ' . (count($logoResults) * 2) . ' Pts deducted.',
+                'message' => 'Logos generated successfully. ' . (count($logoResults) * 1) . ' Pts deducted.',
                 'data' => $logoResults,
                 'errors' => $errors,
-                'coin_deducted' => count($logoResults) * 2
+                'coin_deducted' => count($logoResults) * 1
             ]);
 
         } catch (\Exception $e) {

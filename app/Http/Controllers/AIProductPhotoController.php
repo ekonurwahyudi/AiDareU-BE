@@ -52,7 +52,7 @@ class AIProductPhotoController extends Controller
             $totalCoinKeluar = $coinSummary->total_coin_keluar ?? 0;
             $coinSaatIni = $totalCoinMasuk - $totalCoinKeluar;
 
-            $requiredCoin = 4; // 2 variations x 2 coin each
+            $requiredCoin = 2; // 2 variations x 1 coin each
 
             if ($coinSaatIni < $requiredCoin) {
                 return response()->json([
@@ -60,6 +60,7 @@ class AIProductPhotoController extends Controller
                     'message' => "Coin tidak cukup! Anda memiliki {$coinSaatIni} Pts, membutuhkan {$requiredCoin} Pts untuk generate 2 foto produk.",
                     'current_coin' => $coinSaatIni,
                     'required_coin' => $requiredCoin,
+                    'insufficient_coin' => true
                 ], 400);
             }
 
@@ -192,7 +193,7 @@ class AIProductPhotoController extends Controller
                         'uuid_user' => $user->uuid,
                         'keterangan' => "Generate AI Foto Produk - {$lighting} {$ambiance}",
                         'hasil_generated' => $photo['imageUrl'],
-                        'coin_used' => 2,
+                        'coin_used' => 1,
                     ]);
 
                     // Deduct coin
@@ -200,7 +201,7 @@ class AIProductPhotoController extends Controller
                         'uuid_user' => $user->uuid,
                         'keterangan' => "Generate AI Foto Produk - {$lighting} {$ambiance}",
                         'coin_masuk' => 0,
-                        'coin_keluar' => 2,
+                        'coin_keluar' => 1,
                         'status' => 'berhasil',
                     ]);
                 }
@@ -209,7 +210,7 @@ class AIProductPhotoController extends Controller
                 Log::info('Product photo history saved and coins deducted successfully', [
                     'user_uuid' => $user->uuid,
                     'photos_count' => count($photoResults),
-                    'total_coin_used' => count($photoResults) * 2
+                    'total_coin_used' => count($photoResults) * 1
                 ]);
 
             } catch (\Exception $e) {
@@ -220,10 +221,10 @@ class AIProductPhotoController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Product photos generated successfully. ' . (count($photoResults) * 2) . ' Pts deducted.',
+                'message' => 'Product photos generated successfully. ' . (count($photoResults) * 1) . ' Pts deducted.',
                 'data'    => $photoResults,
                 'errors'  => $errors,
-                'coin_deducted' => count($photoResults) * 2
+                'coin_deducted' => count($photoResults) * 1
             ]);
         } catch (\Exception $e) {
             Log::error('Product photo generation error:', [
