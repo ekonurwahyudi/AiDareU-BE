@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('ai_generation_histories', function (Blueprint $table) {
             $table->id();
-            $table->string('uuid_user');
+            $table->uuid('uuid_user'); // Changed from string to uuid for PostgreSQL compatibility
             $table->string('keterangan'); // Generated AI Logo / Generated AI Foto Produk
             $table->text('hasil_generated'); // URL or JSON data hasil AI
             $table->integer('coin_used')->default(2); // Coin yang digunakan untuk generate
