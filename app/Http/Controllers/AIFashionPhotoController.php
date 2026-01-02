@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AiGenerationHistory;
+use App\Models\CoinTransaction;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -28,6 +32,38 @@ class AIFashionPhotoController extends Controller
                 'additional_instruction' => 'nullable|string|max:500',
                 'custom_model_image' => 'nullable|image|max:10240',
             ]);
+
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 401);
+            }
+
+            // Check coin balance BEFORE generating
+            $coinSummary = CoinTransaction::forUser($user->uuid)
+                ->select(
+                    DB::raw('SUM(coin_masuk) as total_coin_masuk'),
+                    DB::raw('SUM(coin_keluar) as total_coin_keluar')
+                )
+                ->first();
+
+            $totalCoinMasuk = $coinSummary->total_coin_masuk ?? 0;
+            $totalCoinKeluar = $coinSummary->total_coin_keluar ?? 0;
+            $coinSaatIni = $totalCoinMasuk - $totalCoinKeluar;
+
+            $requiredCoin = 2; // 2 variations x 1 coin each
+
+            if ($coinSaatIni < $requiredCoin) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Coin tidak cukup! Anda memiliki {$coinSaatIni} Pts, membutuhkan {$requiredCoin} Pts untuk generate 2 foto fashion.",
+                    'current_coin' => $coinSaatIni,
+                    'required_coin' => $requiredCoin,
+                    'insufficient_coin' => true
+                ], 400);
+            }
 
             Log::info('AI Fashion Photo: validation passed', $request->except(['clothing_image', 'custom_model_image']));
 
@@ -155,11 +191,50 @@ class AIFashionPhotoController extends Controller
                 throw new \Exception('Gagal generate foto. ' . implode('; ', $errors));
             }
 
+            // Save to history and deduct coin using DB transaction
+            DB::beginTransaction();
+            try {
+                $modelType = $request->input('model_type');
+                $visualStyle = $request->input('visual_style');
+
+                foreach ($photoResults as $photo) {
+                    // Save history
+                    AiGenerationHistory::create([
+                        'uuid_user' => $user->uuid,
+                        'keterangan' => "Generate AI Foto Fashion - {$modelType} {$visualStyle}",
+                        'hasil_generated' => $photo['imageUrl'],
+                        'coin_used' => 1,
+                    ]);
+
+                    // Deduct coin
+                    CoinTransaction::create([
+                        'uuid_user' => $user->uuid,
+                        'keterangan' => "Generate AI Foto Fashion - {$modelType} {$visualStyle}",
+                        'coin_masuk' => 0,
+                        'coin_keluar' => 1,
+                        'status' => 'berhasil',
+                    ]);
+                }
+
+                DB::commit();
+                Log::info('Fashion photo history saved and coins deducted successfully', [
+                    'user_uuid' => $user->uuid,
+                    'photos_count' => count($photoResults),
+                    'total_coin_used' => count($photoResults) * 1
+                ]);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error('Error saving history/deducting coin:', ['error' => $e->getMessage()]);
+                // Continue anyway, photos were generated successfully
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => 'Fashion photos generated successfully',
+                'message' => 'Fashion photos generated successfully. ' . (count($photoResults) * 1) . ' Pts deducted.',
                 'data' => $photoResults,
                 'errors' => $errors,
+                'coin_deducted' => count($photoResults) * 1
             ]);
 
         } catch (\Exception $e) {
