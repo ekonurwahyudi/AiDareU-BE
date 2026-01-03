@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\StoreController;
 use App\Http\Controllers\CategoryController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\ShippingController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\Api\SettingTokoController;
 use App\Http\Controllers\Api\CustomerController;
+use App\Http\Controllers\Api\CustomerManagementController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\ProductDigitalController;
 use App\Http\Controllers\Api\NotificationController;
@@ -51,12 +53,12 @@ Route::get('/test-upload', function () {
 Route::get('/test-db', function () {
     try {
         // Test database connection
-        \DB::connection()->getPdo();
+        DB::connection()->getPdo();
 
         // Get database info
-        $dbName = \DB::connection()->getDatabaseName();
-        $usersCount = \DB::table('users')->count();
-        $storesCount = \DB::table('stores')->count();
+        $dbName = DB::connection()->getDatabaseName();
+        $usersCount = DB::table('users')->count();
+        $storesCount = DB::table('stores')->count();
 
         return response()->json([
             'status' => 'success',
@@ -207,6 +209,9 @@ Route::get('/customers/{uuid}', [CustomerController::class, 'show']);
 Route::post('/customers', [CustomerController::class, 'store']);
 Route::put('/customers/{uuid}', [CustomerController::class, 'update']);
 Route::delete('/customers/{uuid}', [CustomerController::class, 'destroy']);
+
+// Master Data: All Customers (for admin)
+Route::get('/customers', [CustomerManagementController::class, 'index']);
 
 // Public: Products API (no auth required for testing)
 Route::get('/public/products', [ProductController::class, 'index']);
