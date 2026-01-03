@@ -20,6 +20,7 @@ use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\Api\SettingTokoController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\CustomerManagementController;
+use App\Http\Controllers\Api\UserManagementController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\ProductDigitalController;
 use App\Http\Controllers\Api\NotificationController;
@@ -212,6 +213,13 @@ Route::get('/customers/{uuid}', [CustomerController::class, 'show']);
 Route::post('/customers', [CustomerController::class, 'store']);
 Route::put('/customers/{uuid}', [CustomerController::class, 'update']);
 Route::delete('/customers/{uuid}', [CustomerController::class, 'destroy']);
+
+// Master Data: User Management
+Route::get('/management/users', [UserManagementController::class, 'index']);
+Route::get('/management/users/{uuid}', [UserManagementController::class, 'show']);
+Route::post('/management/users', [UserManagementController::class, 'store']);
+Route::put('/management/users/{uuid}', [UserManagementController::class, 'update']);
+Route::delete('/management/users/{uuid}', [UserManagementController::class, 'destroy']);
 
 
 
