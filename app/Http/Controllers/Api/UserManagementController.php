@@ -100,7 +100,12 @@ class UserManagementController extends Controller
                 'password' => 'required|string|min:8',
                 'roles' => 'nullable|array',
                 'roles.*' => 'string|exists:roles,name',
-                'is_active' => 'nullable|boolean'
+                'is_active' => 'nullable|boolean',
+                'alasan_gabung' => 'nullable|string',
+                'info_dari' => 'nullable|string|max:255',
+                'location' => 'nullable|string|max:255',
+                'address' => 'nullable|string',
+                'paket' => 'nullable|string|max:255'
             ]);
 
             if ($validator->fails()) {
@@ -111,7 +116,7 @@ class UserManagementController extends Controller
                 ], 422);
             }
 
-            $userData = $request->only(['name', 'nama_lengkap', 'email', 'no_hp', 'is_active']);
+            $userData = $request->only(['name', 'nama_lengkap', 'email', 'no_hp', 'is_active', 'alasan_gabung', 'info_dari', 'location', 'address', 'paket']);
             $userData['password'] = Hash::make($request->password);
 
             $user = User::create($userData);
@@ -162,7 +167,12 @@ class UserManagementController extends Controller
                 'password' => 'nullable|string|min:8',
                 'roles' => 'nullable|array',
                 'roles.*' => 'string|exists:roles,name',
-                'is_active' => 'nullable|boolean'
+                'is_active' => 'nullable|boolean',
+                'alasan_gabung' => 'nullable|string',
+                'info_dari' => 'nullable|string|max:255',
+                'location' => 'nullable|string|max:255',
+                'address' => 'nullable|string',
+                'paket' => 'nullable|string|max:255'
             ]);
 
             if ($validator->fails()) {
@@ -173,7 +183,7 @@ class UserManagementController extends Controller
                 ], 422);
             }
 
-            $userData = $request->only(['name', 'nama_lengkap', 'email', 'no_hp', 'is_active']);
+            $userData = $request->only(['name', 'nama_lengkap', 'email', 'no_hp', 'is_active', 'alasan_gabung', 'info_dari', 'location', 'address', 'paket']);
 
             if ($request->has('password') && $request->password) {
                 $userData['password'] = Hash::make($request->password);
