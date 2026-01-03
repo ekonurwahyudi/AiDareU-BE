@@ -36,17 +36,26 @@ class UserManagementController extends Controller
                           ->orderBy('created_at', 'desc')
                           ->paginate($perPage);
 
-            // Transform roles to array of role names and get store name for each user
+            // Transform the paginated data
             $transformedData = $users->toArray();
-            foreach ($transformedData['data'] as &$user) {
-                // Get roles from model_has_roles via Spatie
-                $userModel = User::with(['roles', 'stores'])->find($user['id']);
-                $user['roles'] = $userModel ? $userModel->roles->pluck('name')->toArray() : [];
 
-                // Get store name (first store where user_id = user.uuid)
-                $user['store_name'] = $userModel && $userModel->stores->isNotEmpty()
-                    ? $userModel->stores->first()->nama_toko
-                    : null;
+            foreach ($transformedData['data'] as &$user) {
+                // Transform roles to array of role names
+                if (isset($user['roles']) && is_array($user['roles'])) {
+                    $user['roles'] = array_column($user['roles'], 'name');
+                } else {
+                    $user['roles'] = [];
+                }
+
+                // Get store name from the first store (where user_id = user.uuid)
+                if (isset($user['stores']) && is_array($user['stores']) && count($user['stores']) > 0) {
+                    $user['store_name'] = $user['stores'][0]['nama_toko'] ?? '-';
+                } else {
+                    $user['store_name'] = '-';
+                }
+
+                // Remove stores array from response to keep it clean
+                unset($user['stores']);
             }
 
             return response()->json([
