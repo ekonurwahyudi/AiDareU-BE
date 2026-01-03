@@ -36,6 +36,12 @@ class UserManagementController extends Controller
                           ->orderBy('created_at', 'desc')
                           ->paginate($perPage);
 
+            // Transform roles to array of role names
+            $users->getCollection()->transform(function ($user) {
+                $user->roles = $user->roles->pluck('name')->toArray();
+                return $user;
+            });
+
             return response()->json([
                 'status' => 'success',
                 'data' => $users
@@ -64,6 +70,9 @@ class UserManagementController extends Controller
                 ], 404);
             }
 
+            // Transform roles to array of role names
+            $user->roles = $user->roles->pluck('name')->toArray();
+
             return response()->json([
                 'status' => 'success',
                 'data' => $user
@@ -89,7 +98,8 @@ class UserManagementController extends Controller
                 'email' => 'required|email|unique:users,email',
                 'no_hp' => 'nullable|string|max:20',
                 'password' => 'required|string|min:8',
-                'role' => 'nullable|string|exists:roles,name',
+                'roles' => 'nullable|array',
+                'roles.*' => 'string|exists:roles,name',
                 'is_active' => 'nullable|boolean'
             ]);
 
@@ -106,15 +116,19 @@ class UserManagementController extends Controller
 
             $user = User::create($userData);
 
-            // Assign role if provided
-            if ($request->has('role')) {
-                $user->syncRoles([$request->role]);
+            // Assign roles if provided
+            if ($request->has('roles') && is_array($request->roles)) {
+                $user->syncRoles($request->roles);
             }
+
+            // Load roles and transform to array of names
+            $user->load('roles');
+            $user->roles = $user->roles->pluck('name')->toArray();
 
             return response()->json([
                 'status' => 'success',
                 'message' => 'User created successfully',
-                'data' => $user->load('roles')
+                'data' => $user
             ], 201);
 
         } catch (\Exception $e) {
@@ -146,7 +160,8 @@ class UserManagementController extends Controller
                 'email' => 'sometimes|required|email|unique:users,email,' . $user->id,
                 'no_hp' => 'nullable|string|max:20',
                 'password' => 'nullable|string|min:8',
-                'role' => 'nullable|string|exists:roles,name',
+                'roles' => 'nullable|array',
+                'roles.*' => 'string|exists:roles,name',
                 'is_active' => 'nullable|boolean'
             ]);
 
