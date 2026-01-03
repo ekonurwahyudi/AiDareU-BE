@@ -181,15 +181,19 @@ class UserManagementController extends Controller
 
             $user->update($userData);
 
-            // Update role if provided
-            if ($request->has('role')) {
-                $user->syncRoles([$request->role]);
+            // Update roles if provided
+            if ($request->has('roles') && is_array($request->roles)) {
+                $user->syncRoles($request->roles);
             }
+
+            // Load roles and transform to array of names
+            $user->load('roles');
+            $user->roles = $user->roles->pluck('name')->toArray();
 
             return response()->json([
                 'status' => 'success',
                 'message' => 'User updated successfully',
-                'data' => $user->load('roles')
+                'data' => $user
             ]);
 
         } catch (\Exception $e) {
