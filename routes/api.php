@@ -205,13 +205,15 @@ Route::put('/order/{uuid}/status', [CheckoutController::class, 'updateOrderStatu
 
 // Public: Customer API (no auth required)
 Route::get('/stores/{storeUuid}/customers', [CustomerController::class, 'index']);
+
+// Master Data: All Customers (for admin) - must be before {uuid} routes
+Route::get('/customers', [CustomerManagementController::class, 'index']);
 Route::get('/customers/{uuid}', [CustomerController::class, 'show']);
 Route::post('/customers', [CustomerController::class, 'store']);
 Route::put('/customers/{uuid}', [CustomerController::class, 'update']);
 Route::delete('/customers/{uuid}', [CustomerController::class, 'destroy']);
 
-// Master Data: All Customers (for admin)
-Route::get('/customers', [CustomerManagementController::class, 'index']);
+
 
 // Public: Products API (no auth required for testing)
 Route::get('/public/products', [ProductController::class, 'index']);
