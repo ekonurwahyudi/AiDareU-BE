@@ -31,17 +31,22 @@ class UserManagementController extends Controller
                 });
             }
 
-            // Include roles
-            $users = $query->with('roles')
+            // Include roles and store (where user_id = user.uuid)
+            $users = $query->with(['roles', 'stores'])
                           ->orderBy('created_at', 'desc')
                           ->paginate($perPage);
 
-            // Transform roles to array of role names for each user
+            // Transform roles to array of role names and get store name for each user
             $transformedData = $users->toArray();
             foreach ($transformedData['data'] as &$user) {
                 // Get roles from model_has_roles via Spatie
-                $userModel = User::with('roles')->find($user['id']);
+                $userModel = User::with(['roles', 'stores'])->find($user['id']);
                 $user['roles'] = $userModel ? $userModel->roles->pluck('name')->toArray() : [];
+
+                // Get store name (first store where user_id = user.uuid)
+                $user['store_name'] = $userModel && $userModel->stores->isNotEmpty()
+                    ? $userModel->stores->first()->nama_toko
+                    : null;
             }
 
             return response()->json([
