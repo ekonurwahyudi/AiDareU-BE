@@ -29,8 +29,8 @@ class CustomerManagementController extends Controller
                 });
             }
 
-            // Include store relationship
-            $customers = $query->with('store:uuid,nama_toko,subdomain')
+            // Include store relationship - load all necessary columns
+            $customers = $query->with('store')
                               ->orderBy('created_at', 'desc')
                               ->paginate($perPage);
 
