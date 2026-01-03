@@ -36,15 +36,17 @@ class UserManagementController extends Controller
                           ->orderBy('created_at', 'desc')
                           ->paginate($perPage);
 
-            // Transform roles to array of role names
-            $users->getCollection()->transform(function ($user) {
-                $user->roles = $user->roles->pluck('name')->toArray();
-                return $user;
-            });
+            // Transform roles to array of role names for each user
+            $transformedData = $users->toArray();
+            foreach ($transformedData['data'] as &$user) {
+                // Get roles from model_has_roles via Spatie
+                $userModel = User::with('roles')->find($user['id']);
+                $user['roles'] = $userModel ? $userModel->roles->pluck('name')->toArray() : [];
+            }
 
             return response()->json([
                 'status' => 'success',
-                'data' => $users
+                'data' => $transformedData
             ]);
 
         } catch (\Exception $e) {
