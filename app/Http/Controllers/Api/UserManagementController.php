@@ -49,7 +49,8 @@ class UserManagementController extends Controller
 
                 // Get store name from the first store (where user_id = user.uuid)
                 if (isset($user['stores']) && is_array($user['stores']) && count($user['stores']) > 0) {
-                    $user['store_name'] = $user['stores'][0]['nama_toko'] ?? '-';
+                    // Try 'name' first, fallback to 'nama_toko' for compatibility
+                    $user['store_name'] = $user['stores'][0]['name'] ?? $user['stores'][0]['nama_toko'] ?? '-';
                 } else {
                     $user['store_name'] = '-';
                 }
