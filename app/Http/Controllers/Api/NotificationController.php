@@ -3,97 +3,54 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Order;
-use App\Models\Store;
-use App\Models\User;
+use App\Models\Notification;
 use Illuminate\Http\Request;
-use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 
 class NotificationController extends Controller
 {
     /**
-     * Get order notifications for logged-in user's store
+     * Get all notifications for the authenticated user
      */
-    public function getOrderNotifications(Request $request)
+    public function index(Request $request)
     {
         try {
-            // Get user UUID from request or auth header
-            $userUuid = $request->get('user_uuid');
-
-            // Try to get from auth header if not in query
-            if (!$userUuid && $request->header('X-User-UUID')) {
-                $userUuid = $request->header('X-User-UUID');
-            }
+            // Get user UUID from authenticated user or request
+            $userUuid = $this->getUserUuid($request);
 
             if (!$userUuid) {
                 return response()->json([
-                    'success' => true,
-                    'message' => 'No user UUID provided',
-                    'data' => [],
-                    'unread_count' => 0
-                ]);
-            }
-
-            // Find user's store
-            $user = User::where('uuid', $userUuid)->first();
-
-            if (!$user) {
-                return response()->json([
                     'success' => false,
-                    'message' => 'User not found',
+                    'message' => 'User not authenticated',
                     'data' => []
-                ], 404);
+                ], 401);
             }
 
-            // Find store by user_id (which stores the user's UUID)
-            $store = Store::where('user_id', $user->uuid)->first();
+            $perPage = $request->get('per_page', 20);
+            $type = $request->get('type'); // Filter by type if provided
 
-            if (!$store) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'No store found for this user',
-                    'data' => []
-                ]);
+            $query = Notification::forUser($userUuid)
+                ->orderBy('created_at', 'desc');
+
+            // Filter by type if provided
+            if ($type) {
+                $query->ofType($type);
             }
 
-            // Get recent orders (last 30 days) for this store
-            $orders = Order::where('uuid_store', $store->uuid)
-                ->with(['customer', 'detailOrders'])
-                ->orderBy('created_at', 'desc')
-                ->limit(20)
-                ->get();
+            $notifications = $query->paginate($perPage);
 
-            // Transform orders to notification format
-            $notifications = $orders->map(function ($order) {
-                $customerName = $order->customer ? $order->customer->nama : 'Unknown Customer';
-                $itemCount = $order->detailOrders->count();
-                $timeAgo = $this->getTimeAgo($order->created_at);
-
-                // Determine if notification is "read" based on order status
-                // New orders (pending) are unread, processed orders are read
-                $isRead = in_array($order->status, ['Diproses', 'Dikirim', 'Selesai', 'Dibatalkan']);
-
-                return [
-                    'id' => $order->uuid,
-                    'order_number' => $order->nomor_order,
-                    'title' => "New Order #{$order->nomor_order}",
-                    'subtitle' => "{$customerName} ordered {$itemCount} item(s) - Rp " . number_format($order->total_harga, 0, ',', '.'),
-                    'time' => $timeAgo,
-                    'read' => $isRead,
-                    'avatarIcon' => 'tabler-shopping-cart',
-                    'avatarColor' => $isRead ? 'secondary' : 'success',
-                    'status' => $order->status,
-                    'total' => $order->total_harga
-                ];
-            });
-
-            // Count unread notifications (pending orders)
-            $unreadCount = $orders->where('status', 'Pending')->count();
+            // Get unread count
+            $unreadCount = Notification::forUser($userUuid)
+                ->unread()
+                ->count();
 
             return response()->json([
                 'success' => true,
-                'data' => $notifications,
-                'unread_count' => $unreadCount
+                'data' => $notifications->items(),
+                'unread_count' => $unreadCount,
+                'total' => $notifications->total(),
+                'current_page' => $notifications->currentPage(),
+                'per_page' => $notifications->perPage(),
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -105,30 +62,66 @@ class NotificationController extends Controller
     }
 
     /**
-     * Mark notification as read (update order status)
+     * Get unread notifications only
      */
-    public function markAsRead(Request $request, $orderUuid)
+    public function unread(Request $request)
     {
         try {
-            $order = Order::where('uuid', $orderUuid)->first();
+            $userUuid = $this->getUserUuid($request);
 
-            if (!$order) {
+            if (!$userUuid) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Order not found'
+                    'message' => 'User not authenticated',
+                    'data' => []
+                ], 401);
+            }
+
+            $notifications = Notification::forUser($userUuid)
+                ->unread()
+                ->orderBy('created_at', 'desc')
+                ->limit(10)
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $notifications,
+                'unread_count' => $notifications->count(),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error fetching unread notifications: ' . $e->getMessage(),
+                'data' => []
+            ], 500);
+        }
+    }
+
+    /**
+     * Mark notification as read
+     */
+    public function markAsRead(Request $request, $id)
+    {
+        try {
+            $userUuid = $this->getUserUuid($request);
+
+            $notification = Notification::where('id', $id)
+                ->where('user_uuid', $userUuid)
+                ->first();
+
+            if (!$notification) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Notification not found'
                 ], 404);
             }
 
-            // Only update if order is still pending
-            if ($order->status === 'Pending') {
-                $order->status = 'Diproses';
-                $order->save();
-            }
+            $notification->markAsRead();
 
             return response()->json([
                 'success' => true,
                 'message' => 'Notification marked as read',
-                'data' => $order
+                'data' => $notification
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -139,27 +132,117 @@ class NotificationController extends Controller
     }
 
     /**
-     * Get time ago format
+     * Mark all notifications as read
      */
-    private function getTimeAgo($datetime)
+    public function markAllAsRead(Request $request)
     {
-        $now = Carbon::now();
-        $created = Carbon::parse($datetime);
+        try {
+            $userUuid = $this->getUserUuid($request);
 
-        $diffInMinutes = $created->diffInMinutes($now);
-        $diffInHours = $created->diffInHours($now);
-        $diffInDays = $created->diffInDays($now);
+            Notification::forUser($userUuid)
+                ->unread()
+                ->update([
+                    'is_read' => true,
+                    'read_at' => now(),
+                ]);
 
-        if ($diffInMinutes < 1) {
-            return 'Just now';
-        } elseif ($diffInMinutes < 60) {
-            return $diffInMinutes . ' minute' . ($diffInMinutes > 1 ? 's' : '') . ' ago';
-        } elseif ($diffInHours < 24) {
-            return $diffInHours . ' hour' . ($diffInHours > 1 ? 's' : '') . ' ago';
-        } elseif ($diffInDays < 7) {
-            return $diffInDays . ' day' . ($diffInDays > 1 ? 's' : '') . ' ago';
-        } else {
-            return $created->format('M d, Y');
+            return response()->json([
+                'success' => true,
+                'message' => 'All notifications marked as read'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error marking all notifications as read: ' . $e->getMessage()
+            ], 500);
         }
+    }
+
+    /**
+     * Delete a notification
+     */
+    public function destroy(Request $request, $id)
+    {
+        try {
+            $userUuid = $this->getUserUuid($request);
+
+            $notification = Notification::where('id', $id)
+                ->where('user_uuid', $userUuid)
+                ->first();
+
+            if (!$notification) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Notification not found'
+                ], 404);
+            }
+
+            $notification->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Notification deleted successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error deleting notification: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get unread count
+     */
+    public function unreadCount(Request $request)
+    {
+        try {
+            $userUuid = $this->getUserUuid($request);
+
+            if (!$userUuid) {
+                return response()->json([
+                    'success' => true,
+                    'unread_count' => 0
+                ]);
+            }
+
+            $count = Notification::forUser($userUuid)
+                ->unread()
+                ->count();
+
+            return response()->json([
+                'success' => true,
+                'unread_count' => $count
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error getting unread count: ' . $e->getMessage(),
+                'unread_count' => 0
+            ], 500);
+        }
+    }
+
+    /**
+     * Get user UUID from request or auth
+     */
+    private function getUserUuid(Request $request)
+    {
+        // Try to get from authenticated user
+        if (Auth::check()) {
+            return Auth::user()->uuid;
+        }
+
+        // Try from request
+        if ($request->has('user_uuid')) {
+            return $request->get('user_uuid');
+        }
+
+        // Try from header
+        if ($request->header('X-User-UUID')) {
+            return $request->header('X-User-UUID');
+        }
+
+        return null;
     }
 }

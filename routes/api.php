@@ -267,8 +267,14 @@ Route::get('/dashboard/popular-products/all', [DashboardController::class, 'popu
 Route::get('/dashboard/popular-stores/all', [DashboardController::class, 'popularStoresAll']);
 
 // Public: Notification API (no auth required for testing)
-Route::get('/notifications/orders', [NotificationController::class, 'getOrderNotifications']);
-Route::post('/notifications/orders/{orderUuid}/read', [NotificationController::class, 'markAsRead']);
+Route::prefix('notifications')->group(function () {
+    Route::get('/', [NotificationController::class, 'index']);
+    Route::get('/unread', [NotificationController::class, 'unread']);
+    Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::post('/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::post('/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+    Route::delete('/{id}', [NotificationController::class, 'destroy']);
+});
 
 // Public: Alternative API endpoints for frontend (no auth required)
 Route::get('/public/stores', [\App\Http\Controllers\StoreController::class, 'index']);
