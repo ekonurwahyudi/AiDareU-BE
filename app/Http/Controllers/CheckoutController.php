@@ -9,6 +9,7 @@ use App\Models\Store;
 use App\Models\BankAccount;
 use App\Models\User;
 use App\Mail\OrderCreated;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -142,17 +143,35 @@ class CheckoutController extends Controller
                 // Don't fail the whole request if email fails
             }
 
+            // Get store owner for email and notification
+            $storeOwner = User::where('uuid', $store->user_id)->first();
+
             // Send email notification to seller/store owner
-            try {
-                // Get store owner's email
-                $storeOwner = User::where('uuid', $store->user_id)->first();
-                if ($storeOwner && $storeOwner->email) {
+            if ($storeOwner && $storeOwner->email) {
+                try {
                     Mail::to($storeOwner->email)->send(new OrderCreated($order, $checkoutUrl, true));
                     Log::info("New order notification email sent to seller: {$storeOwner->email}");
+                } catch (\Exception $e) {
+                    Log::error("Failed to send seller email: " . $e->getMessage());
+                    // Don't fail the whole request if email fails
                 }
-            } catch (\Exception $e) {
-                Log::error("Failed to send seller email: " . $e->getMessage());
-                // Don't fail the whole request if email fails
+            }
+
+            // Create notification for store owner
+            if ($storeOwner) {
+                try {
+                    NotificationService::createOrderNotification(
+                        userUuid: $storeOwner->uuid,
+                        orderNumber: $order->nomor_order,
+                        customerName: $customer->nama,
+                        totalAmount: $order->total_harga,
+                        orderId: $order->uuid
+                    );
+                    Log::info("Order notification created for store owner: {$storeOwner->uuid}");
+                } catch (\Exception $e) {
+                    Log::error("Failed to create order notification: " . $e->getMessage());
+                    // Don't fail the whole request if notification creation fails
+                }
             }
 
             return response()->json([
