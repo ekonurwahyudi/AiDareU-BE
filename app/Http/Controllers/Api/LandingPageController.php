@@ -233,7 +233,12 @@ class LandingPageController extends Controller
 
         $apiKey = config('services.fal.key', env('FAL_API_KEY'));
         if (!$apiKey) {
-            return response()->json(['message' => 'Fal.ai API key missing'], 500);
+            Log::error('FAL_API_KEY is not configured in .env file');
+            return response()->json([
+                'message' => 'Fal.ai API key missing. Please configure FAL_API_KEY in your .env file.',
+                'error' => 'API_KEY_NOT_CONFIGURED',
+                'instructions' => 'Get your API key from https://fal.ai/dashboard/keys and add it to your .env file'
+            ], 500);
         }
 
         // Step 1: Generate landing page schema and copywriting using Fal.ai any-llm with Gemini Flash
@@ -251,18 +256,36 @@ class LandingPageController extends Controller
             ]);
 
         if (!$response->ok()) {
-            return response()->json(['message' => 'AI generation failed', 'details' => $response->json()], 502);
+            $errorBody = $response->body();
+            Log::error('Fal.ai text generation failed', [
+                'status' => $response->status(),
+                'body' => $errorBody,
+                'headers' => $response->headers()
+            ]);
+            return response()->json([
+                'message' => 'AI generation failed',
+                'details' => $response->json(),
+                'status_code' => $response->status()
+            ], 502);
         }
 
         // Parse LLM response
         $content = $response->json('output') ?? '';
         if (empty($content)) {
-            return response()->json(['message' => 'AI returned empty response'], 502);
+            Log::warning('Fal.ai returned empty output', ['response' => $response->json()]);
+            return response()->json([
+                'message' => 'AI returned empty response',
+                'response_data' => $response->json()
+            ], 502);
         }
 
         $json = json_decode($content, true);
         if (!is_array($json)) {
-            return response()->json(['message' => 'AI returned invalid JSON'], 502);
+            Log::error('Fal.ai returned invalid JSON', ['content' => $content]);
+            return response()->json([
+                'message' => 'AI returned invalid JSON',
+                'content' => substr($content, 0, 500)
+            ], 502);
         }
 
         // Pastikan struktur dasar & semua section tersedia
