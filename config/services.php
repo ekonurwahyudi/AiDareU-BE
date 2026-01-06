@@ -11,6 +11,13 @@ return [
         'retries' => (int) env('OPENAI_RETRIES', 5),
     ],
 
+    'fal' => [
+        'key' => env('FAL_API_KEY'),
+        'timeout' => (int) env('FAL_TIMEOUT', 180),
+        'connect_timeout' => (int) env('FAL_CONNECT_TIMEOUT', 30),
+        'retries' => (int) env('FAL_RETRIES', 3),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

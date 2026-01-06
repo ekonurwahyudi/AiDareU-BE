@@ -7,6 +7,7 @@ use App\Models\LandingPage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class LandingPageController extends Controller
 {
@@ -122,6 +123,97 @@ class LandingPageController extends Controller
         }
     }
 
+    /**
+     * Generate image using Fal.ai flux/schnell (fast and cheap)
+     */
+    private function generateImageWithFal(string $prompt, string $apiKey): ?string
+    {
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Key ' . $apiKey,
+                'Content-Type' => 'application/json',
+            ])
+                ->timeout(180)
+                ->connectTimeout(30)
+                ->post('https://queue.fal.run/fal-ai/flux/schnell', [
+                    'prompt' => $prompt,
+                    'image_size' => 'landscape_16_9',
+                    'num_inference_steps' => 4,
+                    'num_images' => 1,
+                    'enable_safety_checker' => true
+                ]);
+
+            if (!$response->ok()) {
+                Log::error('Fal.ai image generation failed: ' . $response->body());
+                return null;
+            }
+
+            $imageUrl = $response->json('images.0.url') ?? null;
+
+            if (!$imageUrl) {
+                Log::warning('Fal.ai returned no image URL');
+                return null;
+            }
+
+            return $imageUrl;
+        } catch (\Exception $e) {
+            Log::error('Image generation exception: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Get hero image prompt based on business category
+     */
+    private function getHeroImagePrompt(string $category, string $description): string
+    {
+        $basePrompts = [
+            'coffee' => 'Professional photography of a cozy modern coffee shop interior with warm lighting, barista making espresso, coffee beans, aesthetic cafe atmosphere, high quality, cinematic lighting',
+            'bakery' => 'Professional photography of artisan bakery interior with fresh bread display, pastries, donuts, warm ambient lighting, inviting atmosphere, high quality, commercial photography',
+            'restaurant' => 'Professional photography of elegant restaurant interior, chef preparing gourmet food, beautiful food presentation, modern dining atmosphere, high quality, cinematic',
+            'fashion' => 'Professional fashion photography, stylish clothing display, modern boutique interior, mannequins with trendy outfits, clean aesthetic, high quality commercial photo',
+            'technology' => 'Modern tech office workspace, people working with laptops and gadgets, clean minimalist design, natural lighting, professional business photography, high quality',
+            'health' => 'Professional medical facility interior, modern healthcare environment, clean and bright atmosphere, wellness concept, high quality medical photography',
+            'education' => 'Modern classroom or learning environment, students engaged in study, bright educational space, inspiring atmosphere, professional education photography',
+            'automotive' => 'Professional automotive showroom photography, modern car display, mechanic workshop, vehicle service center, high quality commercial photography',
+            'general' => 'Professional modern business environment, clean minimalist aesthetic, natural lighting, contemporary office or store interior, high quality commercial photography'
+        ];
+
+        $prompt = $basePrompts[$category] ?? $basePrompts['general'];
+
+        // Add business-specific context
+        $cleanDesc = substr($description, 0, 200);
+        $prompt .= ". Context: {$cleanDesc}";
+
+        return $prompt;
+    }
+
+    /**
+     * Get product image prompt based on business category
+     */
+    private function getProductImagePrompt(string $category, string $description): string
+    {
+        $basePrompts = [
+            'coffee' => 'Professional product photography of premium coffee beverages, latte art, espresso shots, coffee beans, styled on clean background, commercial quality, appetizing presentation',
+            'bakery' => 'Professional product photography of fresh baked goods, artisan bread, pastries, donuts on display, clean styling, commercial bakery photography, appetizing presentation',
+            'restaurant' => 'Professional food photography of gourmet dishes, beautiful plating, signature menu items, restaurant quality presentation, commercial food styling',
+            'fashion' => 'Professional fashion product photography, clothing collection display, accessories, lookbook style, clean background, commercial fashion photography',
+            'technology' => 'Professional product photography of tech gadgets and devices, modern electronics, sleek presentation, clean white background, commercial tech photography',
+            'health' => 'Professional product photography of health and wellness products, medical supplies, clean clinical presentation, white background, commercial healthcare photography',
+            'education' => 'Professional photography of educational materials, books, learning tools, organized presentation, inspiring educational content',
+            'automotive' => 'Professional automotive product photography, car parts, vehicle accessories, mechanical components, clean industrial presentation',
+            'general' => 'Professional product photography with clean presentation, modern aesthetic, commercial quality, well-lit and styled'
+        ];
+
+        $prompt = $basePrompts[$category] ?? $basePrompts['general'];
+
+        // Add business-specific context
+        $cleanDesc = substr($description, 0, 200);
+        $prompt .= ". Product context: {$cleanDesc}";
+
+        return $prompt;
+    }
+
     /* ===========================
      * Generate Landing Page via AI
      * =========================== */
@@ -139,23 +231,22 @@ class LandingPageController extends Controller
 
         $prompt = $this->buildAiPrompt($storeName, $storeDesc);
 
-        $apiKey = config('services.openai.key', env('OPENAI_API_KEY'));
+        $apiKey = config('services.fal.key', env('FAL_API_KEY'));
         if (!$apiKey) {
-            return response()->json(['message' => 'OpenAI API key missing'], 500);
+            return response()->json(['message' => 'Fal.ai API key missing'], 500);
         }
 
-        $response = Http::withToken($apiKey)
-            ->timeout((int) config('services.openai.timeout', 120))
-            ->connectTimeout((int) config('services.openai.connect_timeout', 30))
-            ->retry((int) config('services.openai.retries', 3), 20000)
-            ->post('https://api.openai.com/v1/chat/completions', [
-                'model' => config('services.openai.model', 'gpt-4o-mini'),
-                'messages' => [
-                    ['role' => 'system', 'content' => 'Anda adalah AI yang ahli membuat landing page. KELUARKAN HANYA satu objek JSON VALID.'],
-                    ['role' => 'user', 'content' => $prompt],
-                ],
-                'temperature' => (float) config('services.openai.temperature', 0.4),
-                'max_tokens' => (int) config('services.openai.max_tokens', 12000),
+        // Step 1: Generate landing page schema and copywriting using Fal.ai any-llm with Gemini Flash
+        $response = Http::withHeaders([
+            'Authorization' => 'Key ' . $apiKey,
+            'Content-Type' => 'application/json',
+        ])
+            ->timeout(120)
+            ->connectTimeout(30)
+            ->retry(3, 20000)
+            ->post('https://queue.fal.run/fal-ai/any-llm', [
+                'model' => 'google/gemini-2.0-flash-exp:free',
+                'prompt' => $prompt,
                 'response_format' => ['type' => 'json_object']
             ]);
 
@@ -163,7 +254,12 @@ class LandingPageController extends Controller
             return response()->json(['message' => 'AI generation failed', 'details' => $response->json()], 502);
         }
 
-        $content = $response->json('choices.0.message.content') ?? '';
+        // Parse LLM response
+        $content = $response->json('output') ?? '';
+        if (empty($content)) {
+            return response()->json(['message' => 'AI returned empty response'], 502);
+        }
+
         $json = json_decode($content, true);
         if (!is_array($json)) {
             return response()->json(['message' => 'AI returned invalid JSON'], 502);
@@ -176,6 +272,33 @@ class LandingPageController extends Controller
         $lp =& $json['landingpage'];
         $lp['header']['logo']['text']  = $this->getTextOrArrayValue($lp['header']['logo'] ?? '', 'text', $this->generateLogoText($storeName));
         $lp['meta']['favicon']['text'] = $this->getTextOrArrayValue($lp['meta']['favicon'] ?? '', 'text', $this->generateFaviconText($storeName));
+
+        // Step 2: Generate hero image using Fal.ai flux/schnell (fast and cheap)
+        $businessCategory = $this->analyzeBusiness($storeDesc);
+        $heroImagePrompt = $this->getHeroImagePrompt($businessCategory, $storeDesc);
+
+        try {
+            $heroImageUrl = $this->generateImageWithFal($heroImagePrompt, $apiKey);
+            if ($heroImageUrl) {
+                $lp['hero']['backgroundImage'] = $heroImageUrl;
+            }
+        } catch (\Exception $e) {
+            Log::warning('Hero image generation failed: ' . $e->getMessage());
+            // Continue without hero image if generation fails
+        }
+
+        // Step 3: Generate product image using Fal.ai flux/schnell
+        $productImagePrompt = $this->getProductImagePrompt($businessCategory, $storeDesc);
+
+        try {
+            $productImageUrl = $this->generateImageWithFal($productImagePrompt, $apiKey);
+            if ($productImageUrl) {
+                $lp['product_overview']['image'] = $productImageUrl;
+            }
+        } catch (\Exception $e) {
+            Log::warning('Product image generation failed: ' . $e->getMessage());
+            // Continue without product image if generation fails
+        }
 
         // Bersihkan URL gambar placeholder/random (tanpa fallback)
         $this->sanitizeImagesRecursively($json);
