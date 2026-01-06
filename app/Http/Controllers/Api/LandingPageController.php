@@ -220,73 +220,131 @@ class LandingPageController extends Controller
 
     public function generate(Request $request)
     {
-        $validated = $request->validate([
-            'store_name' => 'required|string|max:100',
-            'store_description' => 'required|string|max:1000',
-        ]);
+        try {
+            Log::info('=== START Landing Page Generation ===');
 
-        $user = $request->user();
-        $storeName = $validated['store_name'];
-        $storeDesc = $validated['store_description'];
+            $validated = $request->validate([
+                'store_name' => 'required|string|max:100',
+                'store_description' => 'required|string|max:1000',
+            ]);
 
-        $prompt = $this->buildAiPrompt($storeName, $storeDesc);
+            $user = $request->user();
+            $storeName = $validated['store_name'];
+            $storeDesc = $validated['store_description'];
 
-        $apiKey = config('services.fal.key', env('FAL_API_KEY'));
-        if (!$apiKey) {
-            Log::error('FAL_API_KEY is not configured in .env file');
+            Log::info('Generation request', [
+                'user_id' => $user->id,
+                'store_name' => $storeName,
+                'store_description' => substr($storeDesc, 0, 100)
+            ]);
+
+            $prompt = $this->buildAiPrompt($storeName, $storeDesc);
+
+            $apiKey = config('services.fal.key', env('FAL_API_KEY'));
+            if (!$apiKey) {
+                Log::error('FAL_API_KEY is not configured in .env file');
+                return response()->json([
+                    'message' => 'Fal.ai API key missing. Please configure FAL_API_KEY in your .env file.',
+                    'error' => 'API_KEY_NOT_CONFIGURED',
+                    'instructions' => 'Get your API key from https://fal.ai/dashboard/keys and add it to your .env file',
+                    'debug' => [
+                        'config_path' => config_path('services.php'),
+                        'env_checked' => [
+                            'FAL_API_KEY' => env('FAL_API_KEY') ? 'EXISTS' : 'MISSING',
+                            'config_fal_key' => config('services.fal.key') ? 'EXISTS' : 'MISSING'
+                        ]
+                    ]
+                ], 500);
+            }
+
+            Log::info('FAL_API_KEY found, starting text generation with Fal.ai');
+
+            // Step 1: Generate landing page schema and copywriting using Fal.ai any-llm with Gemini Flash
+            $response = Http::withHeaders([
+                'Authorization' => 'Key ' . $apiKey,
+                'Content-Type' => 'application/json',
+            ])
+                ->timeout(120)
+                ->connectTimeout(30)
+                ->retry(3, 20000)
+                ->post('https://queue.fal.run/fal-ai/any-llm', [
+                    'model' => 'google/gemini-2.0-flash-exp:free',
+                    'prompt' => $prompt,
+                    'response_format' => ['type' => 'json_object']
+                ]);
+
+            Log::info('Fal.ai text generation response', [
+                'status' => $response->status(),
+                'success' => $response->ok()
+            ]);
+
+            if (!$response->ok()) {
+                $errorBody = $response->body();
+                Log::error('Fal.ai text generation failed', [
+                    'status' => $response->status(),
+                    'body' => $errorBody,
+                    'headers' => $response->headers()
+                ]);
+                return response()->json([
+                    'message' => 'AI generation failed',
+                    'error' => 'FAL_API_ERROR',
+                    'details' => $response->json(),
+                    'status_code' => $response->status(),
+                    'debug' => [
+                        'endpoint' => 'https://queue.fal.run/fal-ai/any-llm',
+                        'model' => 'google/gemini-2.0-flash-exp:free',
+                        'has_api_key' => !empty($apiKey)
+                    ]
+                ], 502);
+            }
+        } catch (\Exception $e) {
+            Log::error('Exception in generate method', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
-                'message' => 'Fal.ai API key missing. Please configure FAL_API_KEY in your .env file.',
-                'error' => 'API_KEY_NOT_CONFIGURED',
-                'instructions' => 'Get your API key from https://fal.ai/dashboard/keys and add it to your .env file'
+                'message' => 'Server error during generation',
+                'error' => 'EXCEPTION',
+                'exception_message' => $e->getMessage(),
+                'exception_file' => $e->getFile(),
+                'exception_line' => $e->getLine()
             ], 500);
         }
 
-        // Step 1: Generate landing page schema and copywriting using Fal.ai any-llm with Gemini Flash
-        $response = Http::withHeaders([
-            'Authorization' => 'Key ' . $apiKey,
-            'Content-Type' => 'application/json',
-        ])
-            ->timeout(120)
-            ->connectTimeout(30)
-            ->retry(3, 20000)
-            ->post('https://queue.fal.run/fal-ai/any-llm', [
-                'model' => 'google/gemini-2.0-flash-exp:free',
-                'prompt' => $prompt,
-                'response_format' => ['type' => 'json_object']
-            ]);
-
-        if (!$response->ok()) {
-            $errorBody = $response->body();
-            Log::error('Fal.ai text generation failed', [
-                'status' => $response->status(),
-                'body' => $errorBody,
-                'headers' => $response->headers()
-            ]);
-            return response()->json([
-                'message' => 'AI generation failed',
-                'details' => $response->json(),
-                'status_code' => $response->status()
-            ], 502);
-        }
-
         // Parse LLM response
+        Log::info('Parsing Fal.ai response');
         $content = $response->json('output') ?? '';
         if (empty($content)) {
             Log::warning('Fal.ai returned empty output', ['response' => $response->json()]);
             return response()->json([
                 'message' => 'AI returned empty response',
-                'response_data' => $response->json()
+                'error' => 'EMPTY_OUTPUT',
+                'response_data' => $response->json(),
+                'debug' => [
+                    'full_response' => $response->json()
+                ]
             ], 502);
         }
 
+        Log::info('Content received from Fal.ai', ['content_length' => strlen($content)]);
+
         $json = json_decode($content, true);
         if (!is_array($json)) {
-            Log::error('Fal.ai returned invalid JSON', ['content' => $content]);
+            Log::error('Fal.ai returned invalid JSON', ['content' => substr($content, 0, 500)]);
             return response()->json([
                 'message' => 'AI returned invalid JSON',
-                'content' => substr($content, 0, 500)
+                'error' => 'INVALID_JSON',
+                'content' => substr($content, 0, 500),
+                'debug' => [
+                    'json_error' => json_last_error_msg()
+                ]
             ], 502);
         }
+
+        Log::info('JSON parsed successfully');
 
         // Pastikan struktur dasar & semua section tersedia
         $this->ensureRequiredSections($json, $storeName);
@@ -298,38 +356,57 @@ class LandingPageController extends Controller
 
         // Step 2: Generate hero image using Fal.ai flux/schnell (fast and cheap)
         $businessCategory = $this->analyzeBusiness($storeDesc);
+        Log::info('Business category detected', ['category' => $businessCategory]);
+
         $heroImagePrompt = $this->getHeroImagePrompt($businessCategory, $storeDesc);
+        Log::info('Generating hero image');
 
         try {
             $heroImageUrl = $this->generateImageWithFal($heroImagePrompt, $apiKey);
             if ($heroImageUrl) {
                 $lp['hero']['backgroundImage'] = $heroImageUrl;
+                Log::info('Hero image generated successfully', ['url' => $heroImageUrl]);
+            } else {
+                Log::warning('Hero image generation returned null');
             }
         } catch (\Exception $e) {
-            Log::warning('Hero image generation failed: ' . $e->getMessage());
+            Log::warning('Hero image generation failed', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             // Continue without hero image if generation fails
         }
 
         // Step 3: Generate product image using Fal.ai flux/schnell
         $productImagePrompt = $this->getProductImagePrompt($businessCategory, $storeDesc);
+        Log::info('Generating product image');
 
         try {
             $productImageUrl = $this->generateImageWithFal($productImagePrompt, $apiKey);
             if ($productImageUrl) {
                 $lp['product_overview']['image'] = $productImageUrl;
+                Log::info('Product image generated successfully', ['url' => $productImageUrl]);
+            } else {
+                Log::warning('Product image generation returned null');
             }
         } catch (\Exception $e) {
-            Log::warning('Product image generation failed: ' . $e->getMessage());
+            Log::warning('Product image generation failed', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             // Continue without product image if generation fails
         }
 
+        Log::info('Sanitizing placeholder images');
         // Bersihkan URL gambar placeholder/random (tanpa fallback)
         $this->sanitizeImagesRecursively($json);
 
         // Jika html/css dari AI kurang layak → buat UI fallback modern lengkap (semua section + form WA)
+        Log::info('Building UI with all sections');
         $json = $this->ensurePrettyUiWithAllSections($json);
 
         // Simpan
+        Log::info('Saving landing page to database');
         $landingPage = LandingPage::create([
             'user_id' => $user->id,
             'uuid' => (string) Str::uuid(),
@@ -337,12 +414,24 @@ class LandingPageController extends Controller
             'data' => $json,
         ]);
 
+        Log::info('=== Landing Page Generation COMPLETED ===', [
+            'id' => $landingPage->id,
+            'uuid' => $landingPage->uuid,
+            'slug' => $landingPage->slug
+        ]);
+
         return response()->json([
             'id' => $landingPage->id,
             'uuid' => $landingPage->uuid,
             'slug' => $landingPage->slug,
             'data' => $json,
-            'message' => 'Landing page generated successfully'
+            'message' => 'Landing page generated successfully',
+            'debug' => [
+                'ai_provider' => 'Fal.ai',
+                'text_model' => 'google/gemini-2.0-flash-exp:free',
+                'image_model' => 'flux/schnell',
+                'business_category' => $businessCategory ?? 'unknown'
+            ]
         ]);
     }
 
