@@ -240,19 +240,16 @@ class LandingPageController extends Controller
 
             $prompt = $this->buildAiPrompt($storeName, $storeDesc);
 
-            $apiKey = config('services.fal.key', env('FAL_API_KEY'));
-            if (!$apiKey) {
+            // Get fal.ai API key directly from env (like AIController)
+            $apiKey = env('FAL_API_KEY');
+            if (!$apiKey || empty(trim($apiKey))) {
                 Log::error('FAL_API_KEY is not configured in .env file');
                 return response()->json([
                     'message' => 'Fal.ai API key missing. Please configure FAL_API_KEY in your .env file.',
                     'error' => 'API_KEY_NOT_CONFIGURED',
                     'instructions' => 'Get your API key from https://fal.ai/dashboard/keys and add it to your .env file',
                     'debug' => [
-                        'config_path' => config_path('services.php'),
-                        'env_checked' => [
-                            'FAL_API_KEY' => env('FAL_API_KEY') ? 'EXISTS' : 'MISSING',
-                            'config_fal_key' => config('services.fal.key') ? 'EXISTS' : 'MISSING'
-                        ]
+                        'env_checked' => env('FAL_API_KEY') ? 'EXISTS' : 'MISSING'
                     ]
                 ], 500);
             }
