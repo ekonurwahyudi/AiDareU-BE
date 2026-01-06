@@ -293,12 +293,21 @@ class RBACController extends Controller
      */
     public function getRoles(): JsonResponse
     {
-        $roles = Role::with('permissions')->orderBy('level', 'desc')->get();
-        
-        return response()->json([
-            'success' => true,
-            'data' => $roles
-        ]);
+        try {
+            $roles = Role::with('permissions')->orderBy('level', 'desc')->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $roles
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error in getRoles: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch roles',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
