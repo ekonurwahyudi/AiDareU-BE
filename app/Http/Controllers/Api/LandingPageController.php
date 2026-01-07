@@ -618,45 +618,127 @@ class LandingPageController extends Controller
         return $slug;
     }
 
-    /** Prompt AI: Wajib gambar relevan sesuai deskripsi (kopi, donat, cafe, dll) & no-random. */
+    /** Prompt AI: Generate unique themed landing page with Tailwind CSS & React-ready structure */
     private function buildAiPrompt(string $storeName, string $storeDesc): string
     {
         $logoText    = $this->generateLogoText($storeName);
         $faviconText = $this->generateFaviconText($storeName);
-        $navLabels   = '"Beranda","Mengapa","Manfaat","Produk","Paket","Testimoni","Pemesanan","FAQ"';
-        $uiGuidelines = 'UI modern: navbar sticky, hero full-bleed dgn overlay tipis, grid cards, rounded-2xl, shadow lembut, glassmorphism, animasi hover, form rapi, footer kontras. Aksesibilitas (alt/aria), semantic tags.';
+        $navLabels   = '"Home","About","Features","Products","Pricing","Testimonials","Contact","FAQ"';
 
         // Analisis deskripsi untuk menentukan kategori bisnis
         $businessCategory = $this->analyzeBusiness($storeDesc);
         $imageGuidelines = $this->getImageGuidelines($businessCategory);
 
+        // Random theme selection untuk variasi UI
+        $themes = [
+            [
+                'name' => 'Modern Minimal',
+                'style' => 'Clean white background, subtle gradients, large typography, generous spacing, minimal shadows, accent color for CTA',
+                'layout' => 'Asymmetric hero, staggered content blocks, floating cards',
+                'colors' => 'bg-white, text-gray-900, accent: blue-600 or indigo-600'
+            ],
+            [
+                'name' => 'Bold & Vibrant',
+                'style' => 'Colorful gradients, bold typography, high contrast, playful animations, geometric shapes',
+                'layout' => 'Full-width hero with diagonal split, grid layouts, overlapping sections',
+                'colors' => 'Gradient backgrounds (purple-pink, blue-cyan), text-white, bright accent colors'
+            ],
+            [
+                'name' => 'Elegant Dark',
+                'style' => 'Dark background (gray-900/black), neon accents, glassmorphism effects, smooth animations',
+                'layout' => 'Centered hero, contained sections, elevated cards with backdrop blur',
+                'colors' => 'bg-gray-900, text-white, accent: cyan-400 or purple-400'
+            ],
+            [
+                'name' => 'Warm & Friendly',
+                'style' => 'Soft pastel colors, rounded corners everywhere, friendly icons, organic shapes',
+                'layout' => 'Curved sections, alternating left-right layouts, soft shadows',
+                'colors' => 'Warm tones (orange-50, amber-100), text-gray-800, accent: orange-500'
+            ],
+            [
+                'name' => 'Corporate Professional',
+                'style' => 'Blue/navy tones, structured layout, subtle shadows, professional imagery',
+                'layout' => 'Traditional hero, 3-column grids, sidebar CTAs',
+                'colors' => 'bg-slate-50, text-slate-900, accent: blue-700 or slate-700'
+            ],
+            [
+                'name' => 'Creative Agency',
+                'style' => 'Asymmetric layouts, bold typography, unexpected color combinations, interactive elements',
+                'layout' => 'Broken grid, diagonal sections, overlapping images and text',
+                'colors' => 'Mix of pastels and vibrant colors, high contrast'
+            ]
+        ];
+
+        $selectedTheme = $themes[array_rand($themes)];
+
         return
-            "Buat 1 (satu) objek JSON landing page untuk bisnis berikut:\n" .
-            "- Nama: {$storeName}\n" .
-            "- Deskripsi: {$storeDesc}\n\n" .
-            "WAJIB menyertakan SEMUA section: Header, Hero Section, Benefits Section, Product Overview, Package Options, Testimonials, CTA Section, FAQ Section.\n" .
-            "WAJIB gunakan URL gambar nyata & SANGAT RELEVAN sesuai deskripsi bisnis:\n" .
+            "Generate a UNIQUE landing page for:\n" .
+            "- Business: {$storeName}\n" .
+            "- Description: {$storeDesc}\n\n" .
+
+            "🎨 THEME REQUIREMENT:\n" .
+            "Apply this UI theme: {$selectedTheme['name']}\n" .
+            "Style: {$selectedTheme['style']}\n" .
+            "Layout: {$selectedTheme['layout']}\n" .
+            "Colors: {$selectedTheme['colors']}\n\n" .
+
+            "⚡ TECHNICAL REQUIREMENTS:\n" .
+            "1. Use ONLY Tailwind CSS classes (v3.x)\n" .
+            "2. HTML structure must be React-ready (use className, onClick patterns)\n" .
+            "3. Components: Each section should be a standalone component\n" .
+            "4. Responsive: Use sm:, md:, lg:, xl: breakpoints\n" .
+            "5. Animations: Use transition-all, hover:scale-105, group-hover patterns\n" .
+            "6. Icons: Use Unicode symbols or describe icon needs (🚀, ⭐, 💡, etc.)\n\n" .
+
+            "📦 REQUIRED SECTIONS (always include):\n" .
+            "- Header: Sticky navbar with logo + navigation\n" .
+            "- Hero: Eye-catching hero with CTA buttons\n" .
+            "- Benefits: 3-4 benefit cards with icons\n" .
+            "- Product Overview: Product showcase with image\n" .
+            "- Packages: 3+ pricing tiers\n" .
+            "- Testimonials: 3+ customer reviews\n" .
+            "- CTA Section: Final conversion section\n" .
+            "- FAQ: Accordion-style FAQs\n" .
+            "- Footer: Links + social media\n\n" .
+
+            "🖼️ IMAGES:\n" .
             "{$imageGuidelines}\n" .
-            "WAJIB host: images.unsplash.com/photo-... atau images.pexels.com/photos/...\n" .
-            "DILARANG pakai placeholder/random: picsum.photos, via.placeholder.com, placehold.co, dummyimage.com, placeimg.com, source.unsplash.com.\n" .
-            "Logo & favicon berupa TEKS pada field \"text\" (bukan URL).\n\n" .
-            "Struktur JSON:\n" .
-            "- landingpage: { meta, header, hero, benefits, product_overview, packages, testimonials, cta_order, faq, footer }\n" .
-            "- html: HTML lengkap (UI modern sesuai \"{$uiGuidelines}\")\n" .
-            "- css: CSS responsif (boleh inline di <style> pada html)\n\n" .
-            "Header/meta contoh:\n" .
-            "\"header\": { \"logo\": { \"text\": \"{$logoText}\", \"url\": \"#\" }, \"navigation\": [{$navLabels}] }\n" .
-            "\"meta\": { \"title\": \"{$storeName}\", \"favicon\": { \"text\": \"{$faviconText}\" } }\n\n" .
-            "Konten minimal:\n" .
-            "- hero: \"headline\", \"subheadline\", \"backgroundImage\"(URL gambar hero yang SANGAT sesuai dengan bisnis)\n" .
-            "- benefits: \"title\", \"items\" (≥3 item: title & description)\n" .
-            "- product_overview: \"title\", \"content\", \"image\"(URL gambar produk yang SANGAT sesuai dengan bisnis)\n" .
-            "- packages: \"title\", \"items\" (≥3: name, price, features[], cta)\n" .
-            "- testimonials: \"title\", \"items\" (≥3: text, name, optional rating)\n" .
-            "- cta_order: \"title\", \"subtitle\", \"form\" (fields minimal: name, phone, package)\n" .
-            "- faq: \"title\", \"items\" (≥4: q, a)\n" .
-            "- footer: \"text\", \"socials\" (array)\n\n" .
-            "KELUARKAN HANYA 1 OBJEK JSON VALID (tanpa markdown, tanpa komentar).";
+            "Use: images.unsplash.com/photo-... or images.pexels.com/photos/...\n" .
+            "NEVER use: picsum.photos, via.placeholder.com, placehold.co, dummyimage.com\n\n" .
+
+            "📋 JSON STRUCTURE:\n" .
+            "{\n" .
+            "  \"landingpage\": {\n" .
+            "    \"meta\": { \"title\": \"{$storeName}\", \"description\": \"...\", \"theme\": \"{$selectedTheme['name']}\", \"favicon\": { \"text\": \"{$faviconText}\" } },\n" .
+            "    \"header\": { \"logo\": { \"text\": \"{$logoText}\" }, \"navigation\": [{$navLabels}] },\n" .
+            "    \"hero\": { \"headline\": \"...\", \"subheadline\": \"...\", \"backgroundImage\": \"...\", \"cta\": [...] },\n" .
+            "    \"benefits\": { \"title\": \"...\", \"items\": [{ \"icon\": \"🚀\", \"title\": \"...\", \"description\": \"...\" }] },\n" .
+            "    \"product_overview\": { \"title\": \"...\", \"content\": \"...\", \"image\": \"...\" },\n" .
+            "    \"packages\": { \"title\": \"...\", \"items\": [{ \"name\": \"...\", \"price\": \"...\", \"features\": [...], \"cta\": \"...\" }] },\n" .
+            "    \"testimonials\": { \"title\": \"...\", \"items\": [{ \"text\": \"...\", \"name\": \"...\", \"role\": \"...\", \"rating\": 5 }] },\n" .
+            "    \"cta_order\": { \"title\": \"...\", \"subtitle\": \"...\", \"button\": \"...\" },\n" .
+            "    \"faq\": { \"title\": \"...\", \"items\": [{ \"question\": \"...\", \"answer\": \"...\" }] },\n" .
+            "    \"footer\": { \"text\": \"...\", \"links\": [...], \"socials\": [{ \"platform\": \"...\", \"url\": \"...\" }] }\n" .
+            "  },\n" .
+            "  \"html\": \"<!DOCTYPE html>...\",\n" .
+            "  \"css\": \"/* Additional custom CSS if needed */\"\n" .
+            "}\n\n" .
+
+            "🎯 HTML GUIDELINES:\n" .
+            "- Use semantic HTML5 tags: <header>, <nav>, <main>, <section>, <article>, <footer>\n" .
+            "- Add Tailwind CDN: <script src='https://cdn.tailwindcss.com'></script>\n" .
+            "- Responsive: Mobile-first approach\n" .
+            "- Interactive: Add hover effects, smooth scrolling (scroll-smooth)\n" .
+            "- Accessibility: Use alt text, aria-labels, proper heading hierarchy\n\n" .
+
+            "✨ MAKE IT UNIQUE:\n" .
+            "- Each generation should have different layout variations\n" .
+            "- Mix different card styles, button styles, section backgrounds\n" .
+            "- Use creative spacing and positioning\n" .
+            "- Add subtle animations and transitions\n" .
+            "- Make it look like a professionally designed template\n\n" .
+
+            "⚠️ OUTPUT: Return ONLY valid JSON (no markdown, no code blocks, no explanations)";
     }
 
     /** Analisis kategori bisnis berdasarkan deskripsi */
