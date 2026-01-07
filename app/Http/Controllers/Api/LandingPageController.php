@@ -672,9 +672,25 @@ class LandingPageController extends Controller
         $selectedTheme = $themes[array_rand($themes)];
 
         return
-            "Generate a UNIQUE landing page for:\n" .
-            "- Business: {$storeName}\n" .
-            "- Description: {$storeDesc}\n\n" .
+            "You are creating a landing page FOR THE BUSINESS ITSELF, NOT for an AI landing page builder.\n\n" .
+
+            "🎯 BUSINESS TO PROMOTE:\n" .
+            "Business Name: {$storeName}\n" .
+            "Business Description: {$storeDesc}\n\n" .
+
+            "❗ IMPORTANT:\n" .
+            "- Create a landing page that SELLS/PROMOTES this specific business\n" .
+            "- The content should be about THEIR products/services\n" .
+            "- DO NOT make a landing page about 'AI landing page builder'\n" .
+            "- DO NOT mention 'Mayumi', 'AI', 'landing page generator' unless it's the actual business\n" .
+            "- Focus on what THIS BUSINESS offers to their customers\n\n" .
+
+            "Example: If business is 'Kopi Nusantara Coffee Shop', make landing page about:\n" .
+            "- Their coffee products\n" .
+            "- Their cafe location\n" .
+            "- Coffee brewing services\n" .
+            "- Coffee shop ambiance\n" .
+            "NOT about: AI, landing pages, website builders, etc.\n\n" .
 
             "🎨 THEME REQUIREMENT:\n" .
             "Apply this UI theme: {$selectedTheme['name']}\n" .
@@ -691,15 +707,32 @@ class LandingPageController extends Controller
             "6. Icons: Use Unicode symbols or describe icon needs (🚀, ⭐, 💡, etc.)\n\n" .
 
             "📦 REQUIRED SECTIONS (always include):\n" .
-            "- Header: Sticky navbar with logo + navigation\n" .
-            "- Hero: Eye-catching hero with CTA buttons\n" .
-            "- Benefits: 3-4 benefit cards with icons\n" .
-            "- Product Overview: Product showcase with image\n" .
-            "- Packages: 3+ pricing tiers\n" .
-            "- Testimonials: 3+ customer reviews\n" .
-            "- CTA Section: Final conversion section\n" .
-            "- FAQ: Accordion-style FAQs\n" .
-            "- Footer: Links + social media\n\n" .
+            "- Header: Logo = {$storeName}, navigation for THIS business\n" .
+            "- Hero: Main value proposition of THIS business\n" .
+            "- Benefits: Why customers should choose THIS business (NOT why use AI)\n" .
+            "- Product Overview: Showcase THIS business's actual products/services\n" .
+            "- Packages: THIS business's pricing plans (NOT landing page packages)\n" .
+            "- Testimonials: Reviews about THIS business (NOT about AI tools)\n" .
+            "- CTA Section: Call to action to buy/contact THIS business\n" .
+            "- FAQ: Questions about THIS business's products/services\n" .
+            "- Footer: THIS business's contact info & social media\n\n" .
+
+            "💡 CONTENT EXAMPLES:\n" .
+            "If business = 'Kopi Nusantara Coffee Shop':\n" .
+            "- Hero: 'Premium Indonesian Coffee Beans'\n" .
+            "- Benefits: 'Freshly Roasted Daily', 'Sourced from Local Farmers'\n" .
+            "- Products: 'Arabica Blend', 'Robusta Specialty', 'Cold Brew'\n" .
+            "- Packages: 'Small (100g)', 'Medium (250g)', 'Large (500g)'\n" .
+            "- Testimonials: 'Best coffee in town!' - Customer name\n" .
+            "- FAQ: 'Where are the beans from?', 'Do you offer delivery?'\n\n" .
+
+            "If business = 'TechFlow SaaS Platform':\n" .
+            "- Hero: 'Automate Your Workflow'\n" .
+            "- Benefits: 'Save Time', 'Increase Productivity', 'Easy Integration'\n" .
+            "- Products: 'Task Automation', 'Team Collaboration', 'Analytics Dashboard'\n" .
+            "- Packages: 'Starter $9/mo', 'Pro $29/mo', 'Enterprise $99/mo'\n" .
+            "- Testimonials: 'Increased our productivity by 300%' - CEO name\n" .
+            "- FAQ: 'How does it work?', 'Can I integrate with Slack?'\n\n" .
 
             "🖼️ IMAGES:\n" .
             "{$imageGuidelines}\n" .
