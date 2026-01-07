@@ -1383,14 +1383,16 @@ HTML;
             $prompt = $this->buildAiPrompt($storeName, $storeDesc);
 
             // Step 1: Generate landing page schema using Fal.ai
+            Log::info('Calling Fal.ai any-llm API (direct endpoint)', ['model' => 'google/gemini-2.0-flash-exp:free']);
+
+            // Use direct endpoint instead of queue for synchronous response
             $response = Http::withHeaders([
                 'Authorization' => 'Key ' . $apiKey,
                 'Content-Type' => 'application/json',
             ])
                 ->timeout(120)
                 ->connectTimeout(30)
-                ->retry(3, 20000)
-                ->post('https://queue.fal.run/fal-ai/any-llm', [
+                ->post('https://fal.run/fal-ai/any-llm', [  // Direct endpoint, not queue
                     'model' => 'google/gemini-2.0-flash-exp:free',
                     'prompt' => $prompt,
                     'response_format' => ['type' => 'json_object']
@@ -1404,10 +1406,18 @@ HTML;
                 throw new \Exception('AI generation failed. Please try again.');
             }
 
+            // Log raw response for debugging
+            $rawResponse = $response->json();
+            Log::info('Fal.ai raw response', ['response' => $rawResponse]);
+
             // Parse response
-            $content = $response->json('output') ?? '';
+            $content = $rawResponse['output'] ?? null;
+
+            Log::info('Extracted content', ['content_length' => strlen($content ?? ''), 'content_preview' => substr($content ?? '', 0, 200)]);
+
             if (empty($content)) {
-                throw new \Exception('AI returned empty response');
+                Log::error('AI returned empty response', ['full_response' => $rawResponse]);
+                throw new \Exception('AI returned empty response. Please check logs.');
             }
 
             $json = json_decode($content, true);
