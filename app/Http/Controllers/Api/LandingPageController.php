@@ -1316,4 +1316,204 @@ HTML;
     {
         return preg_replace('/[^0-9]/', '', $value);
     }
+
+    /**
+     * Generate landing page with coin deduction (for AI Brandings section)
+     * Similar to AIController pattern with coin system
+     */
+    public function generateWithCoin(Request $request)
+    {
+        Log::info('=== AI Landing Page Generation with Coin System ===');
+
+        try {
+            $request->validate([
+                'store_name' => 'required|string|max:200',
+                'store_description' => 'required|string|max:2000',
+            ]);
+
+            $user = \Illuminate\Support\Facades\Auth::user();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 401);
+            }
+
+            // Check coin balance BEFORE generating
+            $coinSummary = \App\Models\CoinTransaction::forUser($user->uuid)
+                ->select(
+                    \Illuminate\Support\Facades\DB::raw('SUM(coin_masuk) as total_coin_masuk'),
+                    \Illuminate\Support\Facades\DB::raw('SUM(coin_keluar) as total_coin_keluar')
+                )
+                ->first();
+
+            $totalCoinMasuk = $coinSummary->total_coin_masuk ?? 0;
+            $totalCoinKeluar = $coinSummary->total_coin_keluar ?? 0;
+            $coinSaatIni = $totalCoinMasuk - $totalCoinKeluar;
+
+            $requiredCoin = 5; // 5 coins for landing page generation
+
+            if ($coinSaatIni < $requiredCoin) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Coin tidak cukup! Anda memiliki {$coinSaatIni} Pts, membutuhkan {$requiredCoin} Pts untuk generate landing page.",
+                    'current_coin' => $coinSaatIni,
+                    'required_coin' => $requiredCoin,
+                    'insufficient_coin' => true
+                ], 400);
+            }
+
+            $storeName = $request->input('store_name');
+            $storeDesc = $request->input('store_description');
+
+            Log::info('Generation request with coin', [
+                'user_id' => $user->id,
+                'store_name' => $storeName,
+                'coin_before' => $coinSaatIni
+            ]);
+
+            // Get fal.ai API key
+            $apiKey = env('FAL_API_KEY');
+            if (!$apiKey || empty(trim($apiKey))) {
+                Log::error('FAL_API_KEY not configured');
+                throw new \Exception('Fal.ai API key belum dikonfigurasi. Silakan hubungi administrator.');
+            }
+
+            // Generate prompt
+            $prompt = $this->buildAiPrompt($storeName, $storeDesc);
+
+            // Step 1: Generate landing page schema using Fal.ai
+            $response = Http::withHeaders([
+                'Authorization' => 'Key ' . $apiKey,
+                'Content-Type' => 'application/json',
+            ])
+                ->timeout(120)
+                ->connectTimeout(30)
+                ->retry(3, 20000)
+                ->post('https://queue.fal.run/fal-ai/any-llm', [
+                    'model' => 'google/gemini-2.0-flash-exp:free',
+                    'prompt' => $prompt,
+                    'response_format' => ['type' => 'json_object']
+                ]);
+
+            if (!$response->ok()) {
+                Log::error('Fal.ai generation failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body()
+                ]);
+                throw new \Exception('AI generation failed. Please try again.');
+            }
+
+            // Parse response
+            $content = $response->json('output') ?? '';
+            if (empty($content)) {
+                throw new \Exception('AI returned empty response');
+            }
+
+            $json = json_decode($content, true);
+            if (!is_array($json)) {
+                throw new \Exception('AI returned invalid JSON');
+            }
+
+            // Process the landing page data
+            $this->ensureRequiredSections($json, $storeName);
+
+            // Force logo & favicon as text
+            $lp =& $json['landingpage'];
+            $lp['header']['logo']['text'] = $this->getTextOrArrayValue($lp['header']['logo'] ?? '', 'text', $this->generateLogoText($storeName));
+            $lp['meta']['favicon']['text'] = $this->getTextOrArrayValue($lp['meta']['favicon'] ?? '', 'text', $this->generateFaviconText($storeName));
+
+            // Generate hero image
+            $businessCategory = $this->analyzeBusiness($storeDesc);
+            $heroImagePrompt = $this->getHeroImagePrompt($businessCategory, $storeDesc);
+
+            try {
+                $heroImageUrl = $this->generateImageWithFal($heroImagePrompt, $apiKey);
+                if ($heroImageUrl) {
+                    $lp['hero']['backgroundImage'] = $heroImageUrl;
+                    Log::info('Hero image generated');
+                }
+            } catch (\Exception $e) {
+                Log::warning('Hero image generation failed: ' . $e->getMessage());
+            }
+
+            // Generate product image
+            $productImagePrompt = $this->getProductImagePrompt($businessCategory, $storeDesc);
+            try {
+                $productImageUrl = $this->generateImageWithFal($productImagePrompt, $apiKey);
+                if ($productImageUrl) {
+                    $lp['product_overview']['image'] = $productImageUrl;
+                    Log::info('Product image generated');
+                }
+            } catch (\Exception $e) {
+                Log::warning('Product image generation failed: ' . $e->getMessage());
+            }
+
+            // Sanitize images
+            $this->sanitizeImagesRecursively($json);
+
+            // Build UI
+            $json = $this->ensurePrettyUiWithAllSections($json);
+
+            // Save landing page
+            $landingPage = LandingPage::create([
+                'user_id' => $user->id,
+                'uuid' => (string) Str::uuid(),
+                'slug' => Str::slug($storeName . '-' . Str::random(6)),
+                'data' => $json,
+            ]);
+
+            // DEDUCT COIN - Save coin transaction
+            \App\Models\CoinTransaction::create([
+                'user_uuid' => $user->uuid,
+                'keterangan' => "AI Landing Page Generation - {$storeName}",
+                'coin_keluar' => $requiredCoin,
+                'coin_masuk' => 0,
+            ]);
+
+            // Save to AI generation history
+            \App\Models\AiGenerationHistory::create([
+                'user_uuid' => $user->uuid,
+                'type' => 'landing-page',
+                'prompt' => "Store: {$storeName}\n\nDescription: " . substr($storeDesc, 0, 500),
+                'result_data' => [
+                    'landing_page_id' => $landingPage->id,
+                    'landing_page_uuid' => $landingPage->uuid,
+                    'landing_page_slug' => $landingPage->slug,
+                ],
+                'coin_used' => $requiredCoin,
+                'status' => 'success',
+            ]);
+
+            Log::info('Landing page generated successfully with coin deduction', [
+                'landing_page_id' => $landingPage->id,
+                'coin_used' => $requiredCoin
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Landing page berhasil di-generate!',
+                'data' => [
+                    'id' => $landingPage->id,
+                    'uuid' => $landingPage->uuid,
+                    'slug' => $landingPage->slug,
+                    'data' => $json,
+                ],
+                'coin_used' => $requiredCoin,
+                'coin_remaining' => $coinSaatIni - $requiredCoin
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Landing page generation with coin failed', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

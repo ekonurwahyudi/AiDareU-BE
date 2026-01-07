@@ -464,6 +464,9 @@ Route::middleware(['auth:sanctum,web'])->group(function () {
         // AI Fashion Photo Routes
         Route::get('/fashion-photo/test', [AIFashionPhotoController::class, 'testEndpoint']);
         Route::post('/generate-fashion-photo', [AIFashionPhotoController::class, 'generateFashionPhoto']);
+
+        // AI Landing Page Generation (with coin system)
+        Route::post('/generate-landing-page', [LandingPageController::class, 'generateWithCoin']);
     });
 
     // Coin Transaction Routes (protected - require auth)
