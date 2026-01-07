@@ -1385,7 +1385,7 @@ HTML;
             // Step 1: Generate landing page schema using Fal.ai Bria FIBO
             Log::info('Calling Fal.ai Bria FIBO API', ['endpoint' => 'bria/fibo/generate/structured_prompt']);
 
-            // Use Bria FIBO for structured JSON generation
+            // Use Bria FIBO structured prompt endpoint (text-to-json)
             $response = Http::withHeaders([
                 'Authorization' => 'Key ' . $apiKey,
                 'Content-Type' => 'application/json',
@@ -1394,25 +1394,7 @@ HTML;
                 ->connectTimeout(30)
                 ->post('https://fal.run/bria/fibo/generate/structured_prompt', [
                     'prompt' => $prompt,
-                    'structured_output' => true,
-                    'json_schema' => [
-                        'type' => 'object',
-                        'properties' => [
-                            'landingpage' => [
-                                'type' => 'object',
-                                'description' => 'Complete landing page structure with all sections'
-                            ],
-                            'html' => [
-                                'type' => 'string',
-                                'description' => 'Complete HTML markup for the landing page'
-                            ],
-                            'css' => [
-                                'type' => 'string',
-                                'description' => 'Complete CSS styles for the landing page'
-                            ]
-                        ],
-                        'required' => ['landingpage', 'html', 'css']
-                    ]
+                    'seed' => rand(1000, 9999)
                 ]);
 
             if (!$response->ok()) {
@@ -1425,35 +1407,60 @@ HTML;
 
             // Log raw response for debugging
             $rawResponse = $response->json();
-            Log::info('Fal.ai Bria FIBO raw response', ['response' => $rawResponse]);
+            Log::info('Fal.ai Bria FIBO raw response', [
+                'response_keys' => array_keys($rawResponse),
+                'response_preview' => substr(json_encode($rawResponse), 0, 500)
+            ]);
 
-            // Parse response - Bria FIBO returns structured_output field
+            // Parse response - Bria FIBO may return structured_prompt or direct JSON
+            $json = null;
             $content = null;
 
-            if (isset($rawResponse['structured_output'])) {
-                // structured_output is already parsed JSON
-                $json = $rawResponse['structured_output'];
-            } elseif (isset($rawResponse['output'])) {
-                // Fallback to output field if structured_output not available
+            // Check various possible response structures
+            if (isset($rawResponse['structured_prompt']) && is_array($rawResponse['structured_prompt'])) {
+                // If structured_prompt is already an object/array
+                $json = $rawResponse['structured_prompt'];
+                Log::info('Found structured_prompt as array');
+            } elseif (isset($rawResponse['structured_prompt']) && is_string($rawResponse['structured_prompt'])) {
+                // If structured_prompt is a JSON string
+                $content = $rawResponse['structured_prompt'];
+                Log::info('Found structured_prompt as string');
+            } elseif (isset($rawResponse['output']) && is_string($rawResponse['output'])) {
+                // If output field contains JSON string
                 $content = $rawResponse['output'];
-            } elseif (isset($rawResponse['result'])) {
-                // Check if result contains the output
-                $content = $rawResponse['result'];
+                Log::info('Found output as string');
+            } elseif (isset($rawResponse['data'])) {
+                // If data field contains the result
+                $json = $rawResponse['data'];
+                Log::info('Found data field');
+            } elseif (isset($rawResponse['landingpage'])) {
+                // If response is already the landing page object
+                $json = $rawResponse;
+                Log::info('Response is already landing page object');
             }
 
-            // If we got content as string, parse it
+            // If we have string content, try to parse it as JSON
             if ($content !== null) {
-                Log::info('Extracted content from output', ['content_length' => strlen($content ?? ''), 'content_preview' => substr($content ?? '', 0, 200)]);
+                Log::info('Parsing JSON string content', [
+                    'content_length' => strlen($content),
+                    'content_preview' => substr($content, 0, 200)
+                ]);
                 $json = json_decode($content, true);
             }
 
-            // Validate we have the JSON structure
-            if (!isset($json) || !is_array($json)) {
-                Log::error('AI returned invalid response', ['full_response' => $rawResponse]);
-                throw new \Exception('AI returned invalid response. Please check logs.');
+            // Validate we got valid JSON structure
+            if (!is_array($json)) {
+                Log::error('Failed to extract valid JSON from response', [
+                    'full_response' => $rawResponse,
+                    'json_type' => gettype($json)
+                ]);
+                throw new \Exception('AI returned invalid response structure. Please check logs.');
             }
 
-            Log::info('Successfully parsed JSON response', ['has_landingpage' => isset($json['landingpage'])]);
+            Log::info('Successfully parsed JSON response', [
+                'has_landingpage' => isset($json['landingpage']),
+                'json_keys' => array_keys($json)
+            ]);
 
             // Process the landing page data
             $this->ensureRequiredSections($json, $storeName);
