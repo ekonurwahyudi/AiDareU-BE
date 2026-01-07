@@ -1382,24 +1382,41 @@ HTML;
             // Generate prompt
             $prompt = $this->buildAiPrompt($storeName, $storeDesc);
 
-            // Step 1: Generate landing page schema using Fal.ai
-            Log::info('Calling Fal.ai any-llm API (direct endpoint)', ['model' => 'google/gemini-2.0-flash-exp:free']);
+            // Step 1: Generate landing page schema using Fal.ai Bria FIBO
+            Log::info('Calling Fal.ai Bria FIBO API', ['endpoint' => 'bria/fibo/generate/structured_prompt']);
 
-            // Use direct endpoint instead of queue for synchronous response
+            // Use Bria FIBO for structured JSON generation
             $response = Http::withHeaders([
                 'Authorization' => 'Key ' . $apiKey,
                 'Content-Type' => 'application/json',
             ])
                 ->timeout(120)
                 ->connectTimeout(30)
-                ->post('https://fal.run/fal-ai/any-llm', [  // Direct endpoint, not queue
-                    'model' => 'google/gemini-2.0-flash-exp:free',
+                ->post('https://fal.run/bria/fibo/generate/structured_prompt', [
                     'prompt' => $prompt,
-                    'response_format' => ['type' => 'json_object']
+                    'structured_output' => true,
+                    'json_schema' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'landingpage' => [
+                                'type' => 'object',
+                                'description' => 'Complete landing page structure with all sections'
+                            ],
+                            'html' => [
+                                'type' => 'string',
+                                'description' => 'Complete HTML markup for the landing page'
+                            ],
+                            'css' => [
+                                'type' => 'string',
+                                'description' => 'Complete CSS styles for the landing page'
+                            ]
+                        ],
+                        'required' => ['landingpage', 'html', 'css']
+                    ]
                 ]);
 
             if (!$response->ok()) {
-                Log::error('Fal.ai generation failed', [
+                Log::error('Fal.ai Bria FIBO generation failed', [
                     'status' => $response->status(),
                     'body' => $response->body()
                 ]);
@@ -1408,22 +1425,35 @@ HTML;
 
             // Log raw response for debugging
             $rawResponse = $response->json();
-            Log::info('Fal.ai raw response', ['response' => $rawResponse]);
+            Log::info('Fal.ai Bria FIBO raw response', ['response' => $rawResponse]);
 
-            // Parse response
-            $content = $rawResponse['output'] ?? null;
+            // Parse response - Bria FIBO returns structured_output field
+            $content = null;
 
-            Log::info('Extracted content', ['content_length' => strlen($content ?? ''), 'content_preview' => substr($content ?? '', 0, 200)]);
-
-            if (empty($content)) {
-                Log::error('AI returned empty response', ['full_response' => $rawResponse]);
-                throw new \Exception('AI returned empty response. Please check logs.');
+            if (isset($rawResponse['structured_output'])) {
+                // structured_output is already parsed JSON
+                $json = $rawResponse['structured_output'];
+            } elseif (isset($rawResponse['output'])) {
+                // Fallback to output field if structured_output not available
+                $content = $rawResponse['output'];
+            } elseif (isset($rawResponse['result'])) {
+                // Check if result contains the output
+                $content = $rawResponse['result'];
             }
 
-            $json = json_decode($content, true);
-            if (!is_array($json)) {
-                throw new \Exception('AI returned invalid JSON');
+            // If we got content as string, parse it
+            if ($content !== null) {
+                Log::info('Extracted content from output', ['content_length' => strlen($content ?? ''), 'content_preview' => substr($content ?? '', 0, 200)]);
+                $json = json_decode($content, true);
             }
+
+            // Validate we have the JSON structure
+            if (!isset($json) || !is_array($json)) {
+                Log::error('AI returned invalid response', ['full_response' => $rawResponse]);
+                throw new \Exception('AI returned invalid response. Please check logs.');
+            }
+
+            Log::info('Successfully parsed JSON response', ['has_landingpage' => isset($json['landingpage'])]);
 
             // Process the landing page data
             $this->ensureRequiredSections($json, $storeName);
