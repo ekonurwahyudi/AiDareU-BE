@@ -415,22 +415,6 @@ Route::middleware(['auth:sanctum,web'])->group(function () {
     });
     
 
-    // Landing Page Routes
-    Route::post('/generate-landing', [LandingPageController::class, 'generate']);
-    Route::post('/landing', [LandingPageController::class, 'store']);
-    Route::get('/landing', [LandingPageController::class, 'index']);
-    Route::get('/test-openai', [LandingPageController::class, 'testOpenAI']);
-    
-    Route::post('/landing/{landing}/update', [LandingPageController::class, 'update']);
-    Route::get('/landing/{landing}', [LandingPageController::class, 'showById']);
-    Route::delete('/landing/{landing}', [LandingPageController::class, 'destroy']);
-    Route::post('/landing/{landing}/duplicate', [LandingPageController::class, 'duplicate']);
-
-    Route::get('/landing/uuid/{uuid}', [LandingPageController::class, 'showByUuid']);
-    Route::post('/landing/uuid/{uuid}/update', [LandingPageController::class, 'updateByUuid']);
-    Route::delete('/landing/uuid/{uuid}', [LandingPageController::class, 'destroyByUuid']);
-    Route::post('/landing/uuid/{uuid}/duplicate', [LandingPageController::class, 'duplicateByUuid']);
-    Route::get('/landing/uuid/{uuid}/images', [LandingPageController::class, 'getConsistentImages']);
 });
 
 // Public
@@ -496,5 +480,24 @@ Route::middleware(['auth:sanctum,web'])->group(function () {
         Route::get('/check-coin', [\App\Http\Controllers\AiGenerationHistoryController::class, 'checkCoin']);
         Route::post('/', [\App\Http\Controllers\AiGenerationHistoryController::class, 'store']);
         Route::delete('/{id}', [\App\Http\Controllers\AiGenerationHistoryController::class, 'destroy']);
+    });
+
+    // Landing Page Routes (protected - require auth)
+    Route::prefix('landing')->group(function () {
+        Route::post('/generate', [LandingPageController::class, 'generate']);
+        Route::post('/', [LandingPageController::class, 'store']);
+        Route::get('/', [LandingPageController::class, 'index']);
+        Route::get('/test-openai', [LandingPageController::class, 'testOpenAI']);
+
+        Route::post('/{landing}/update', [LandingPageController::class, 'update']);
+        Route::get('/{landing}', [LandingPageController::class, 'showById']);
+        Route::delete('/{landing}', [LandingPageController::class, 'destroy']);
+        Route::post('/{landing}/duplicate', [LandingPageController::class, 'duplicate']);
+
+        Route::get('/uuid/{uuid}', [LandingPageController::class, 'showByUuid']);
+        Route::post('/uuid/{uuid}/update', [LandingPageController::class, 'updateByUuid']);
+        Route::delete('/uuid/{uuid}', [LandingPageController::class, 'destroyByUuid']);
+        Route::post('/uuid/{uuid}/duplicate', [LandingPageController::class, 'duplicateByUuid']);
+        Route::get('/uuid/{uuid}/images', [LandingPageController::class, 'getConsistentImages']);
     });
 });
