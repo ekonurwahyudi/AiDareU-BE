@@ -1463,27 +1463,38 @@ HTML;
                 'data' => $json,
             ]);
 
-            // DEDUCT COIN - Save coin transaction
-            \App\Models\CoinTransaction::create([
-                'user_uuid' => $user->uuid,
-                'keterangan' => "AI Landing Page Generation - {$storeName}",
-                'coin_keluar' => $requiredCoin,
-                'coin_masuk' => 0,
-            ]);
+            // Save to history and deduct coin using DB transaction
+            \Illuminate\Support\Facades\DB::beginTransaction();
+            try {
+                // Save to AI generation history
+                \App\Models\AiGenerationHistory::create([
+                    'uuid_user' => $user->uuid,
+                    'keterangan' => "Generate AI Landing Page - {$storeName}",
+                    'hasil_generated' => url("/pages/landing/{$landingPage->uuid}"),
+                    'coin_used' => $requiredCoin,
+                ]);
 
-            // Save to AI generation history
-            \App\Models\AiGenerationHistory::create([
-                'user_uuid' => $user->uuid,
-                'type' => 'landing-page',
-                'prompt' => "Store: {$storeName}\n\nDescription: " . substr($storeDesc, 0, 500),
-                'result_data' => [
+                // Deduct coin
+                \App\Models\CoinTransaction::create([
+                    'uuid_user' => $user->uuid,
+                    'keterangan' => "Generate AI Landing Page - {$storeName}",
+                    'coin_masuk' => 0,
+                    'coin_keluar' => $requiredCoin,
+                    'status' => 'berhasil',
+                ]);
+
+                \Illuminate\Support\Facades\DB::commit();
+                Log::info('History saved and coins deducted successfully', [
+                    'user_uuid' => $user->uuid,
                     'landing_page_id' => $landingPage->id,
-                    'landing_page_uuid' => $landingPage->uuid,
-                    'landing_page_slug' => $landingPage->slug,
-                ],
-                'coin_used' => $requiredCoin,
-                'status' => 'success',
-            ]);
+                    'coin_used' => $requiredCoin
+                ]);
+
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\DB::rollBack();
+                Log::error('Error saving history/deducting coin:', ['error' => $e->getMessage()]);
+                // Continue anyway, landing page was generated successfully
+            }
 
             Log::info('Landing page generated successfully with coin deduction', [
                 'landing_page_id' => $landingPage->id,
@@ -1492,15 +1503,14 @@ HTML;
 
             return response()->json([
                 'success' => true,
-                'message' => 'Landing page berhasil di-generate!',
+                'message' => 'Landing page generated successfully. ' . $requiredCoin . ' Pts deducted.',
                 'data' => [
                     'id' => $landingPage->id,
                     'uuid' => $landingPage->uuid,
                     'slug' => $landingPage->slug,
                     'data' => $json,
                 ],
-                'coin_used' => $requiredCoin,
-                'coin_remaining' => $coinSaatIni - $requiredCoin
+                'coin_deducted' => $requiredCoin
             ]);
 
         } catch (\Exception $e) {
