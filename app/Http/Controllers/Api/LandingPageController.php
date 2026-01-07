@@ -1372,33 +1372,52 @@ HTML;
                 'coin_before' => $coinSaatIni
             ]);
 
-            // Get fal.ai API key
-            $apiKey = env('FAL_API_KEY');
-            if (!$apiKey || empty(trim($apiKey))) {
-                Log::error('FAL_API_KEY not configured');
-                throw new \Exception('Fal.ai API key belum dikonfigurasi. Silakan hubungi administrator.');
-            }
-
             // Generate prompt
             $prompt = $this->buildAiPrompt($storeName, $storeDesc);
 
-            // Step 1: Generate landing page schema using Fal.ai Bria FIBO
-            Log::info('Calling Fal.ai Bria FIBO API', ['endpoint' => 'bria/fibo/generate/structured_prompt']);
+            // Step 1: Generate landing page schema using OpenAI
+            $openaiKey = env('OPENAI_API_KEY');
+            $openaiModel = env('OPENAI_MODEL', 'gpt-4-turbo-preview');
+            $openaiMaxTokens = env('OPENAI_MAX_TOKENS', 15000);
+            $openaiTemperature = env('OPENAI_TEMPERATURE', 0.3);
 
-            // Use Bria FIBO structured prompt endpoint (text-to-json)
+            if (!$openaiKey || empty(trim($openaiKey))) {
+                Log::error('OpenAI API key not configured');
+                throw new \Exception('OpenAI API key belum dikonfigurasi. Silakan hubungi administrator.');
+            }
+
+            Log::info('Calling OpenAI API', [
+                'model' => $openaiModel,
+                'max_tokens' => $openaiMaxTokens,
+                'temperature' => $openaiTemperature
+            ]);
+
+            // Call OpenAI API
             $response = Http::withHeaders([
-                'Authorization' => 'Key ' . $apiKey,
+                'Authorization' => 'Bearer ' . $openaiKey,
                 'Content-Type' => 'application/json',
             ])
                 ->timeout(120)
                 ->connectTimeout(30)
-                ->post('https://fal.run/bria/fibo/generate/structured_prompt', [
-                    'prompt' => $prompt,
-                    'seed' => rand(1000, 9999)
+                ->post('https://api.openai.com/v1/chat/completions', [
+                    'model' => $openaiModel,
+                    'messages' => [
+                        [
+                            'role' => 'system',
+                            'content' => 'You are a professional landing page designer. Generate a complete landing page JSON structure based on the user\'s requirements. Always respond with valid JSON only, no markdown, no explanations.'
+                        ],
+                        [
+                            'role' => 'user',
+                            'content' => $prompt
+                        ]
+                    ],
+                    'max_tokens' => (int) $openaiMaxTokens,
+                    'temperature' => (float) $openaiTemperature,
+                    'response_format' => ['type' => 'json_object']
                 ]);
 
             if (!$response->ok()) {
-                Log::error('Fal.ai Bria FIBO generation failed', [
+                Log::error('OpenAI API generation failed', [
                     'status' => $response->status(),
                     'body' => $response->body()
                 ]);
@@ -1407,54 +1426,33 @@ HTML;
 
             // Log raw response for debugging
             $rawResponse = $response->json();
-            Log::info('Fal.ai Bria FIBO raw response', [
-                'response_keys' => array_keys($rawResponse),
-                'response_preview' => substr(json_encode($rawResponse), 0, 500)
+            Log::info('OpenAI raw response structure', [
+                'has_choices' => isset($rawResponse['choices']),
+                'choices_count' => isset($rawResponse['choices']) ? count($rawResponse['choices']) : 0,
+                'usage' => $rawResponse['usage'] ?? null
             ]);
 
-            // Parse response - Bria FIBO may return structured_prompt or direct JSON
-            $json = null;
-            $content = null;
+            // Parse OpenAI response
+            $content = $rawResponse['choices'][0]['message']['content'] ?? null;
 
-            // Check various possible response structures
-            if (isset($rawResponse['structured_prompt']) && is_array($rawResponse['structured_prompt'])) {
-                // If structured_prompt is already an object/array
-                $json = $rawResponse['structured_prompt'];
-                Log::info('Found structured_prompt as array');
-            } elseif (isset($rawResponse['structured_prompt']) && is_string($rawResponse['structured_prompt'])) {
-                // If structured_prompt is a JSON string
-                $content = $rawResponse['structured_prompt'];
-                Log::info('Found structured_prompt as string');
-            } elseif (isset($rawResponse['output']) && is_string($rawResponse['output'])) {
-                // If output field contains JSON string
-                $content = $rawResponse['output'];
-                Log::info('Found output as string');
-            } elseif (isset($rawResponse['data'])) {
-                // If data field contains the result
-                $json = $rawResponse['data'];
-                Log::info('Found data field');
-            } elseif (isset($rawResponse['landingpage'])) {
-                // If response is already the landing page object
-                $json = $rawResponse;
-                Log::info('Response is already landing page object');
+            if (empty($content)) {
+                Log::error('OpenAI returned empty response', ['full_response' => $rawResponse]);
+                throw new \Exception('AI returned empty response. Please check logs.');
             }
 
-            // If we have string content, try to parse it as JSON
-            if ($content !== null) {
-                Log::info('Parsing JSON string content', [
-                    'content_length' => strlen($content),
-                    'content_preview' => substr($content, 0, 200)
-                ]);
-                $json = json_decode($content, true);
-            }
+            Log::info('Extracted content from OpenAI', [
+                'content_length' => strlen($content),
+                'content_preview' => substr($content, 0, 200)
+            ]);
 
-            // Validate we got valid JSON structure
+            // Parse JSON
+            $json = json_decode($content, true);
             if (!is_array($json)) {
-                Log::error('Failed to extract valid JSON from response', [
-                    'full_response' => $rawResponse,
-                    'json_type' => gettype($json)
+                Log::error('Failed to parse JSON from OpenAI', [
+                    'content_preview' => substr($content, 0, 500),
+                    'json_error' => json_last_error_msg()
                 ]);
-                throw new \Exception('AI returned invalid response structure. Please check logs.');
+                throw new \Exception('AI returned invalid JSON: ' . json_last_error_msg());
             }
 
             Log::info('Successfully parsed JSON response', [
@@ -1470,30 +1468,37 @@ HTML;
             $lp['header']['logo']['text'] = $this->getTextOrArrayValue($lp['header']['logo'] ?? '', 'text', $this->generateLogoText($storeName));
             $lp['meta']['favicon']['text'] = $this->getTextOrArrayValue($lp['meta']['favicon'] ?? '', 'text', $this->generateFaviconText($storeName));
 
-            // Generate hero image
-            $businessCategory = $this->analyzeBusiness($storeDesc);
-            $heroImagePrompt = $this->getHeroImagePrompt($businessCategory, $storeDesc);
+            // Get FAL API key for image generation
+            $falApiKey = env('FAL_API_KEY');
 
-            try {
-                $heroImageUrl = $this->generateImageWithFal($heroImagePrompt, $apiKey);
-                if ($heroImageUrl) {
-                    $lp['hero']['backgroundImage'] = $heroImageUrl;
-                    Log::info('Hero image generated');
-                }
-            } catch (\Exception $e) {
-                Log::warning('Hero image generation failed: ' . $e->getMessage());
-            }
+            // Generate hero image (if FAL API key available)
+            if ($falApiKey && !empty(trim($falApiKey))) {
+                $businessCategory = $this->analyzeBusiness($storeDesc);
+                $heroImagePrompt = $this->getHeroImagePrompt($businessCategory, $storeDesc);
 
-            // Generate product image
-            $productImagePrompt = $this->getProductImagePrompt($businessCategory, $storeDesc);
-            try {
-                $productImageUrl = $this->generateImageWithFal($productImagePrompt, $apiKey);
-                if ($productImageUrl) {
-                    $lp['product_overview']['image'] = $productImageUrl;
-                    Log::info('Product image generated');
+                try {
+                    $heroImageUrl = $this->generateImageWithFal($heroImagePrompt, $falApiKey);
+                    if ($heroImageUrl) {
+                        $lp['hero']['backgroundImage'] = $heroImageUrl;
+                        Log::info('Hero image generated with FAL');
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Hero image generation failed: ' . $e->getMessage());
                 }
-            } catch (\Exception $e) {
-                Log::warning('Product image generation failed: ' . $e->getMessage());
+
+                // Generate product image
+                $productImagePrompt = $this->getProductImagePrompt($businessCategory, $storeDesc);
+                try {
+                    $productImageUrl = $this->generateImageWithFal($productImagePrompt, $falApiKey);
+                    if ($productImageUrl) {
+                        $lp['product_overview']['image'] = $productImageUrl;
+                        Log::info('Product image generated with FAL');
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Product image generation failed: ' . $e->getMessage());
+                }
+            } else {
+                Log::info('FAL API key not configured, skipping AI image generation');
             }
 
             // Sanitize images
