@@ -53,8 +53,10 @@ class DuitkuController extends Controller
             // Generate timestamp (Jakarta timezone, milliseconds)
             $timestamp = round(microtime(true) * 1000);
 
-            // Generate signature: SHA256(merchantCode + timestamp + apiKey)
-            $signature = hash('sha256', $this->merchantCode . $timestamp . $this->apiKey);
+            // Generate signature: SHA256(merchantCode - timestamp - apiKey)
+            // Note: Dash separator as per Duitku documentation
+            $signatureString = $this->merchantCode . $timestamp . $this->apiKey;
+            $signature = hash('sha256', $signatureString);
 
             // Prepare request data for createInvoice
             $requestData = [
@@ -86,6 +88,7 @@ class DuitkuController extends Controller
                 : 'https://api-prod.duitku.com/api/merchant/createInvoice';
 
             $response = Http::withHeaders([
+                'Accept' => 'application/json',
                 'Content-Type' => 'application/json',
                 'x-duitku-signature' => $signature,
                 'x-duitku-timestamp' => $timestamp,
