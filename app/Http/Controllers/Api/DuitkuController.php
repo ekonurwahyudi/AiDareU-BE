@@ -24,7 +24,7 @@ class DuitkuController extends Controller
     }
 
     /**
-     * Create Duitku payment transaction
+     * Create Duitku payment transaction (Pop-up)
      * POST /api/payment/duitku/create
      */
     public function createPayment(Request $request)
@@ -32,7 +32,6 @@ class DuitkuController extends Controller
         try {
             $request->validate([
                 'coin_amount' => 'required|integer|min:1',
-                'payment_method' => 'required|string|max:2', // VC, VA, OV, etc.
             ]);
 
             $user = auth()->user();
@@ -45,43 +44,50 @@ class DuitkuController extends Controller
 
             $coinAmount = $request->coin_amount;
             $paymentAmount = $coinAmount * 1000; // 1 coin = Rp 1,000
-            $paymentMethod = $request->payment_method;
 
             // Generate unique order ID
             $merchantOrderId = 'TOPUP-' . strtoupper(Str::random(10)) . '-' . time();
 
-            // Generate signature: MD5(merchantCode + merchantOrderId + paymentAmount + apiKey)
-            $signature = md5($this->merchantCode . $merchantOrderId . $paymentAmount . $this->apiKey);
+            // Generate timestamp (Jakarta timezone, milliseconds)
+            $timestamp = round(microtime(true) * 1000);
 
-            // Prepare request data
+            // Generate signature: SHA256(merchantCode + timestamp + apiKey)
+            $signature = hash('sha256', $this->merchantCode . $timestamp . $this->apiKey);
+
+            // Prepare request data for createInvoice
             $requestData = [
                 'merchantCode' => $this->merchantCode,
                 'paymentAmount' => $paymentAmount,
-                'paymentMethod' => $paymentMethod,
                 'merchantOrderId' => $merchantOrderId,
-                'productDetails' => "Top Up {$coinAmount} Coin - {$user->name}",
+                'productDetails' => "Top Up {$coinAmount} Coin",
                 'email' => $user->email,
-                'phoneNumber' => $user->phone ?? '08123456789',
                 'callbackUrl' => url('/api/payment/duitku/callback'),
                 'returnUrl' => url('/apps/tokoku/coin-history'),
-                'signature' => $signature,
                 'expiryPeriod' => 60, // 60 minutes expiry
+                'customerDetail' => [
+                    'firstName' => $user->name ?? 'User',
+                    'email' => $user->email,
+                ],
             ];
 
             Log::info('Duitku payment request', [
                 'user_id' => $user->id,
                 'coin_amount' => $coinAmount,
                 'payment_amount' => $paymentAmount,
-                'order_id' => $merchantOrderId
+                'order_id' => $merchantOrderId,
+                'timestamp' => $timestamp
             ]);
 
-            // Call Duitku API
+            // Call Duitku createInvoice API
             $endpoint = $this->sandboxMode
-                ? 'https://sandbox.duitku.com/webapi/api/merchant/v2/inquiry'
-                : 'https://passport.duitku.com/webapi/api/merchant/v2/inquiry';
+                ? 'https://api-sandbox.duitku.com/api/merchant/createInvoice'
+                : 'https://api-prod.duitku.com/api/merchant/createInvoice';
 
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
+                'x-duitku-signature' => $signature,
+                'x-duitku-timestamp' => $timestamp,
+                'x-duitku-merchantcode' => $this->merchantCode,
             ])->post($endpoint, $requestData);
 
             if (!$response->successful()) {
@@ -98,16 +104,15 @@ class DuitkuController extends Controller
 
             $result = $response->json();
 
-            // Check status
-            if ($result['statusCode'] !== '00') {
+            // Check if response is successful
+            if (!isset($result['reference'])) {
                 Log::error('Duitku transaction failed', [
-                    'status_code' => $result['statusCode'],
-                    'status_message' => $result['statusMessage'] ?? 'Unknown error'
+                    'response' => $result
                 ]);
 
                 return response()->json([
                     'success' => false,
-                    'message' => $result['statusMessage'] ?? 'Transaction failed'
+                    'message' => $result['Message'] ?? 'Transaction failed'
                 ], 400);
             }
 
@@ -116,13 +121,10 @@ class DuitkuController extends Controller
                 'user_id' => $user->id,
                 'merchant_order_id' => $merchantOrderId,
                 'reference' => $result['reference'],
-                'payment_method' => $paymentMethod,
+                'payment_method' => 'POP', // Pop-up method
                 'coin_amount' => $coinAmount,
                 'payment_amount' => $paymentAmount,
                 'status' => 'pending',
-                'payment_url' => $result['paymentUrl'] ?? null,
-                'va_number' => $result['vaNumber'] ?? null,
-                'qr_string' => $result['qrString'] ?? null,
             ]);
 
             Log::info('Duitku transaction created', [
@@ -130,19 +132,16 @@ class DuitkuController extends Controller
                 'reference' => $result['reference']
             ]);
 
+            // Return reference for pop-up checkout
             return response()->json([
                 'success' => true,
                 'message' => 'Payment created successfully',
                 'data' => [
                     'transaction_id' => $transaction->id,
                     'merchant_order_id' => $merchantOrderId,
-                    'reference' => $result['reference'],
-                    'payment_url' => $result['paymentUrl'],
-                    'va_number' => $result['vaNumber'] ?? null,
-                    'qr_string' => $result['qrString'] ?? null,
+                    'reference' => $result['reference'], // This is the DUITKU_REFERENCE
                     'amount' => $paymentAmount,
                     'coin_amount' => $coinAmount,
-                    'expiry_period' => 60,
                 ]
             ]);
 
