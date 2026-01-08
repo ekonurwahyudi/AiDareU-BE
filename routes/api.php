@@ -480,7 +480,7 @@ Route::get('/ai/fashion-photo/download/{filename}', [AIFashionPhotoController::c
 
 // Protected: Theme Settings Management
 // NOTE: OPTIONS preflight requests are handled by ForceJsonResponse middleware
-Route::middleware(['auth:sanctum,web'])->group(function () {
+Route::middleware(['web', 'auth:web,sanctum'])->group(function () {
     Route::post('/theme-settings/general', [SettingTokoController::class, 'updateGeneral']);
     Route::post('/theme-settings/slides', [SettingTokoController::class, 'updateSlides']);
     Route::post('/theme-settings/faq', [SettingTokoController::class, 'createFaq']);
