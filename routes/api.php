@@ -99,6 +99,42 @@ Route::get('/test-cors', function () {
 // Duitku Payment Callback (public endpoint - no auth required)
 Route::post('/payment/duitku/callback', [\App\Http\Controllers\Api\DuitkuController::class, 'handleCallback']);
 
+// Debug Auth Endpoint - untuk test authentication
+Route::get('/debug/auth', function (Request $request) {
+    $user = auth('web')->user();
+    $sanctumUser = auth('sanctum')->user();
+
+    return response()->json([
+        'authenticated' => auth()->check(),
+        'web_guard' => [
+            'authenticated' => auth('web')->check(),
+            'user' => $user ? [
+                'id' => $user->id,
+                'uuid' => $user->uuid,
+                'name' => $user->name,
+                'email' => $user->email,
+            ] : null
+        ],
+        'sanctum_guard' => [
+            'authenticated' => auth('sanctum')->check(),
+            'user' => $sanctumUser ? [
+                'id' => $sanctumUser->id,
+                'uuid' => $sanctumUser->uuid,
+                'name' => $sanctumUser->name,
+                'email' => $sanctumUser->email,
+            ] : null
+        ],
+        'session_id' => session()->getId(),
+        'has_session' => $request->hasSession(),
+        'cookies' => $request->cookies->all(),
+        'headers' => [
+            'origin' => $request->header('Origin'),
+            'referer' => $request->header('Referer'),
+            'cookie' => $request->header('Cookie') ? 'present' : 'missing',
+        ],
+    ]);
+});
+
 // Debug stores endpoint
 Route::get('/debug/stores', function () {
     try {
