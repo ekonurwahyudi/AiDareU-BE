@@ -173,13 +173,15 @@ Route::post('/test-register', function (Request $request) {
     ]);
 });
 
-// Public Auth Routes
-Route::post('/auth/register', [AuthController::class, 'register']);
-Route::post('/auth/verify-email', [AuthController::class, 'verifyEmail']);
-Route::post('/auth/resend-verification', [AuthController::class, 'resendVerification']);
-Route::post('/auth/login', [AuthController::class, 'login']);
-Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
-Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
+// Public Auth Routes (with web middleware for session support)
+Route::middleware('web')->group(function () {
+    Route::post('/auth/register', [AuthController::class, 'register']);
+    Route::post('/auth/verify-email', [AuthController::class, 'verifyEmail']);
+    Route::post('/auth/resend-verification', [AuthController::class, 'resendVerification']);
+    Route::post('/auth/login', [AuthController::class, 'login']);
+    Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
+});
 
 // Public: Subdomain availability (no auth required)
 Route::get('/stores/check-subdomain', [StoreController::class, 'checkSubdomain']);

@@ -287,6 +287,19 @@ class AuthController extends Controller
             // Login user to web session (for session-based auth)
             auth()->login($user);
 
+            // Regenerate session ID for security
+            $request->session()->regenerate();
+
+            // Log session info for debugging
+            Log::info('User logged in', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'session_id' => session()->getId(),
+                'session_driver' => config('session.driver'),
+                'session_domain' => config('session.domain'),
+                'session_cookie' => config('session.cookie'),
+            ]);
+
             // Create token
             $token = $user->createToken('auth_token')->plainTextToken;
 
