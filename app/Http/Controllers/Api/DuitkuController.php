@@ -14,14 +14,17 @@ use Illuminate\Support\Str;
 
 class DuitkuController extends Controller
 {
-    private $merchantCode = 'D21180';
+    private $merchantCode;
     private $apiKey;
-    private $sandboxMode = true; // Set false untuk production
+    private $sandboxMode;
 
     public function __construct()
     {
+        // Ambil dari environment variable
+        $this->merchantCode = env('DUITKU_MERCHANT_CODE', 'D21180');
         $this->apiKey = env('DUITKU_API_KEY');
-        $this->sandboxMode = env('DUITKU_SANDBOX', true);
+        // PENTING: Set false untuk production karena merchant code D21180 adalah production
+        $this->sandboxMode = env('DUITKU_SANDBOX', false);
     }
 
     /**
