@@ -24,7 +24,14 @@ class DuitkuController extends Controller
         $this->merchantCode = env('DUITKU_MERCHANT_CODE', 'D21180');
         $this->apiKey = env('DUITKU_API_KEY');
         // PENTING: Set false untuk production karena merchant code D21180 adalah production
-        $this->sandboxMode = env('DUITKU_SANDBOX', false);
+        $this->sandboxMode = filter_var(env('DUITKU_SANDBOX', false), FILTER_VALIDATE_BOOLEAN);
+        
+        Log::info('DuitkuController initialized', [
+            'merchant_code' => $this->merchantCode,
+            'api_key_set' => !empty($this->apiKey),
+            'sandbox_mode' => $this->sandboxMode,
+            'sandbox_env_raw' => env('DUITKU_SANDBOX'),
+        ]);
     }
 
     /**
