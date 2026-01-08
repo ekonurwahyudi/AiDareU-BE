@@ -7,6 +7,7 @@ use App\Models\CoinTransaction;
 use App\Models\DuitkuTransaction;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -34,7 +35,8 @@ class DuitkuController extends Controller
                 'coin_amount' => 'required|integer|min:1',
             ]);
 
-            $user = auth()->user();
+            /** @var \App\Models\User|null $user */
+            $user = Auth::user();
             if (!$user) {
                 return response()->json([
                     'success' => false,
