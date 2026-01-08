@@ -27,6 +27,7 @@ class DuitkuController extends Controller
     /**
      * Create Duitku payment transaction (Pop-up)
      * POST /api/payment/duitku/create
+     * Sesuai dokumentasi: https://docs.duitku.com/pop/id/#integrasi-backend-atau-server
      */
     public function createPayment(Request $request)
     {
@@ -45,33 +46,54 @@ class DuitkuController extends Controller
             }
 
             $coinAmount = $request->coin_amount;
-            $paymentAmount = $coinAmount * 1000; // 1 coin = Rp 1,000
+            // Harga: 5 pts = Rp 5.000, 10 pts = Rp 10.000 (1 coin = Rp 1.000)
+            $paymentAmount = $coinAmount * 1000;
 
             // Generate unique order ID
             $merchantOrderId = 'TOPUP-' . strtoupper(Str::random(10)) . '-' . time();
 
-            // Generate timestamp (Jakarta timezone, milliseconds)
+            // Generate timestamp (Jakarta timezone, milliseconds) - UNIX timestamp in milliseconds
             $timestamp = round(microtime(true) * 1000);
 
-            // Generate signature: SHA256(merchantCode - timestamp - apiKey)
-            // Note: Dash separator as per Duitku documentation
+            // Generate signature: SHA256(merchantCode + timestamp + apiKey)
+            // Sesuai dokumentasi Duitku: "Parameter yang berisi hash adalah merchant code, timestamp, kemudian API key dan harus berurutan"
+            // TANPA separator/dash
             $signatureString = $this->merchantCode . $timestamp . $this->apiKey;
             $signature = hash('sha256', $signatureString);
 
-            // Prepare request data for createInvoice
+            Log::info('Duitku signature generation', [
+                'merchant_code' => $this->merchantCode,
+                'timestamp' => $timestamp,
+                'signature_string' => $this->merchantCode . $timestamp . '***API_KEY***',
+                'signature' => $signature
+            ]);
+
+            // Prepare request data for createInvoice sesuai dokumentasi
             $requestData = [
-                'merchantCode' => $this->merchantCode,
                 'paymentAmount' => $paymentAmount,
                 'merchantOrderId' => $merchantOrderId,
-                'productDetails' => "Top Up {$coinAmount} Coin",
+                'productDetails' => "Top Up {$coinAmount} Coin AiDareU",
+                'additionalParam' => '',
+                'merchantUserInfo' => $user->email,
+                'customerVaName' => $user->name ?? 'User',
                 'email' => $user->email,
-                'callbackUrl' => url('/api/payment/duitku/callback'),
-                'returnUrl' => url('/apps/tokoku/coin-history'),
-                'expiryPeriod' => 60, // 60 minutes expiry
+                'phoneNumber' => $user->phone ?? '',
+                'itemDetails' => [
+                    [
+                        'name' => "Top Up {$coinAmount} Coin",
+                        'price' => $paymentAmount,
+                        'quantity' => 1
+                    ]
+                ],
                 'customerDetail' => [
                     'firstName' => $user->name ?? 'User',
+                    'lastName' => '',
                     'email' => $user->email,
+                    'phoneNumber' => $user->phone ?? '',
                 ],
+                'callbackUrl' => url('/api/payment/duitku/callback'),
+                'returnUrl' => env('APP_FRONTEND_URL', 'https://aidareu.com') . '/apps/tokoku/coin-history',
+                'expiryPeriod' => 60, // 60 minutes expiry
             ];
 
             Log::info('Duitku payment request', [
@@ -79,21 +101,37 @@ class DuitkuController extends Controller
                 'coin_amount' => $coinAmount,
                 'payment_amount' => $paymentAmount,
                 'order_id' => $merchantOrderId,
-                'timestamp' => $timestamp
+                'timestamp' => $timestamp,
+                'sandbox_mode' => $this->sandboxMode,
+                'request_data' => $requestData
             ]);
 
-            // Call Duitku createInvoice API
+            // Call Duitku createInvoice API (lowercase 'createinvoice' sesuai dokumentasi)
             $endpoint = $this->sandboxMode
-                ? 'https://api-sandbox.duitku.com/api/merchant/createInvoice'
-                : 'https://api-prod.duitku.com/api/merchant/createInvoice';
+                ? 'https://api-sandbox.duitku.com/api/merchant/createinvoice'
+                : 'https://api-prod.duitku.com/api/merchant/createinvoice';
+
+            Log::info('Duitku API call', [
+                'endpoint' => $endpoint,
+                'headers' => [
+                    'x-duitku-signature' => $signature,
+                    'x-duitku-timestamp' => $timestamp,
+                    'x-duitku-merchantcode' => $this->merchantCode,
+                ]
+            ]);
 
             $response = Http::withHeaders([
                 'Accept' => 'application/json',
                 'Content-Type' => 'application/json',
                 'x-duitku-signature' => $signature,
-                'x-duitku-timestamp' => $timestamp,
+                'x-duitku-timestamp' => (string) $timestamp,
                 'x-duitku-merchantcode' => $this->merchantCode,
             ])->post($endpoint, $requestData);
+
+            Log::info('Duitku API response', [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
 
             if (!$response->successful()) {
                 Log::error('Duitku API error', [
@@ -101,9 +139,16 @@ class DuitkuController extends Controller
                     'body' => $response->body()
                 ]);
 
+                $errorBody = $response->json();
+                $errorMessage = $errorBody['Message'] ?? $errorBody['message'] ?? 'Payment gateway error';
+
                 return response()->json([
                     'success' => false,
-                    'message' => 'Payment gateway error. Please try again.'
+                    'message' => $errorMessage,
+                    'debug' => [
+                        'status' => $response->status(),
+                        'response' => $errorBody
+                    ]
                 ], 500);
             }
 
@@ -111,13 +156,13 @@ class DuitkuController extends Controller
 
             // Check if response is successful
             if (!isset($result['reference'])) {
-                Log::error('Duitku transaction failed', [
+                Log::error('Duitku transaction failed - no reference', [
                     'response' => $result
                 ]);
 
                 return response()->json([
                     'success' => false,
-                    'message' => $result['Message'] ?? 'Transaction failed'
+                    'message' => $result['Message'] ?? $result['statusMessage'] ?? 'Transaction failed'
                 ], 400);
             }
 
@@ -144,7 +189,7 @@ class DuitkuController extends Controller
                 'data' => [
                     'transaction_id' => $transaction->id,
                     'merchant_order_id' => $merchantOrderId,
-                    'reference' => $result['reference'], // This is the DUITKU_REFERENCE
+                    'reference' => $result['reference'], // This is the DUITKU_REFERENCE for pop-up
                     'amount' => $paymentAmount,
                     'coin_amount' => $coinAmount,
                 ]
