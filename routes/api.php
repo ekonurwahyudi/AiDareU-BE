@@ -173,6 +173,27 @@ Route::post('/test-register', function (Request $request) {
     ]);
 });
 
+// Test Session Endpoint
+Route::middleware('web')->get('/test-session', function (Request $request) {
+    // Force session start
+    $request->session()->put('test_key', 'test_value_' . time());
+    $request->session()->save();
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Session test',
+        'session_id' => session()->getId(),
+        'session_data' => $request->session()->all(),
+        'session_driver' => config('session.driver'),
+        'session_domain' => config('session.domain'),
+        'session_cookie_name' => config('session.cookie'),
+        'session_secure' => config('session.secure'),
+        'session_same_site' => config('session.same_site'),
+        'has_session' => $request->hasSession(),
+        'cookies_in_request' => $request->cookies->all(),
+    ]);
+});
+
 // Public Auth Routes (with web middleware for session support)
 Route::middleware('web')->group(function () {
     Route::post('/auth/register', [AuthController::class, 'register']);
