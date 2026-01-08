@@ -127,6 +127,15 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        // Security log channel for monitoring security events
+        'security' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/security.log'),
+            'level' => 'warning',
+            'days' => 30, // Keep security logs for 30 days
+            'replace_placeholders' => true,
+        ],
+
     ],
 
 ];

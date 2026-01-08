@@ -30,8 +30,25 @@ use App\Http\Controllers\AIMergePhotoController;
 use App\Http\Controllers\AIFashionPhotoController;
 use App\Http\Controllers\CoinTransactionController;
 
+/*
+|--------------------------------------------------------------------------
+| SECURITY: Rate Limiting Applied
+|--------------------------------------------------------------------------
+| - auth: 5 requests/minute (login, register, password reset)
+| - api: 60 requests/minute (general API)
+| - payment: 10 requests/minute (payment endpoints)
+| - ai-generation: 20 requests/minute (AI endpoints)
+| - upload: 30 requests/minute (file uploads)
+| - otp: 5 requests/10 minutes (verification codes)
+|--------------------------------------------------------------------------
+*/
+
+// ============================================================================
+// HEALTH CHECK & PUBLIC ENDPOINTS (Rate Limited)
+// ============================================================================
+
 // Health check endpoint for monitoring
-Route::get('/health', function () {
+Route::middleware('throttle:api')->get('/health', function () {
     return response()->json([
         'status' => 'ok',
         'message' => 'API is working!',
@@ -40,50 +57,13 @@ Route::get('/health', function () {
     ]);
 });
 
-// Test endpoint
-Route::get('/test', function () {
+// Test endpoint (rate limited)
+Route::middleware('throttle:api')->get('/test', function () {
     return response()->json(['message' => 'API is working!']);
 });
 
-// Test upload endpoint
-Route::get('/test-upload', function () {
-    return response()->json(['message' => 'Upload endpoint is accessible!']);
-});
-
-// Test database connection endpoint
-Route::get('/test-db', function () {
-    try {
-        // Test database connection
-        DB::connection()->getPdo();
-
-        // Get database info
-        $dbName = DB::connection()->getDatabaseName();
-        $usersCount = DB::table('users')->count();
-        $storesCount = DB::table('stores')->count();
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Database connected successfully!',
-            'database' => $dbName,
-            'connection' => 'OK',
-            'stats' => [
-                'users' => $usersCount,
-                'stores' => $storesCount
-            ],
-            'timestamp' => now()->toIso8601String()
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'status' => 'error',
-            'message' => 'Database connection failed!',
-            'error' => $e->getMessage(),
-            'timestamp' => now()->toIso8601String()
-        ], 500);
-    }
-});
-
-// Test CORS endpoint
-Route::get('/test-cors', function () {
+// Test CORS endpoint (rate limited)
+Route::middleware('throttle:api')->get('/test-cors', function () {
     return response()->json([
         'status' => 'success',
         'message' => 'CORS is working!',
@@ -96,90 +76,44 @@ Route::get('/test-cors', function () {
     ]);
 });
 
-// Duitku Payment Callback (public endpoint - no auth required)
-Route::post('/payment/duitku/callback', [\App\Http\Controllers\Api\DuitkuController::class, 'handleCallback']);
+// ============================================================================
+// PAYMENT CALLBACKS (Public but Rate Limited)
+// ============================================================================
 
-// Debug stores endpoint
-Route::get('/debug/stores', function () {
-    try {
-        $user = \App\Models\User::where('uuid', 'e4fcfcba-63bc-41ff-a36c-11c6e57d16f8')->first();
-        if (!$user) {
-            return response()->json(['error' => 'User not found']);
-        }
-        
-        $stores = \App\Models\Store::where('user_id', $user->uuid)->get();
-        return response()->json([
-            'user' => $user->uuid,
-            'stores' => $stores
-        ]);
-    } catch (\Exception $e) {
-        return response()->json(['error' => $e->getMessage()]);
+// Duitku Payment Callback (public endpoint - no auth required, but rate limited)
+Route::middleware('throttle:payment-callback')
+    ->post('/payment/duitku/callback', [\App\Http\Controllers\Api\DuitkuController::class, 'handleCallback']);
+
+// ============================================================================
+// DEBUG ENDPOINTS - DISABLED IN PRODUCTION
+// ============================================================================
+// SECURITY: Debug endpoints removed for production security
+// If needed for development, uncomment and protect with admin middleware
+
+/*
+// DEBUG ENDPOINTS - ONLY FOR DEVELOPMENT
+if (app()->environment('local', 'development')) {
+    Route::middleware(['throttle:api'])->group(function () {
+        Route::get('/debug/stores', function () { ... });
+        Route::get('/debug/social-media', function () { ... });
+        Route::get('/debug/bank-accounts', function () { ... });
+        Route::get('/test-db', function () { ... });
+    });
+}
+*/
+
+// ============================================================================
+// TEST SESSION ENDPOINT (Development Only)
+// ============================================================================
+Route::middleware(['web', 'throttle:api'])->get('/test-session', function (Request $request) {
+    // Only allow in non-production
+    if (app()->environment('production')) {
+        return response()->json(['error' => 'Not available in production'], 403);
     }
-});
-
-// Debug social media endpoint
-Route::get('/debug/social-media', function () {
-    try {
-        $user = \App\Models\User::where('uuid', 'e4fcfcba-63bc-41ff-a36c-11c6e57d16f8')->first();
-        if (!$user) {
-            return response()->json(['error' => 'User not found']);
-        }
-        
-        $store = \App\Models\Store::where('user_id', $user->uuid)->first();
-        if (!$store) {
-            return response()->json(['error' => 'Store not found']);
-        }
-        
-        $socialMedia = \App\Models\SocialMedia::where('store_uuid', $store->uuid)->get();
-        return response()->json([
-            'user' => $user->uuid,
-            'store' => $store->uuid,
-            'social_media' => $socialMedia
-        ]);
-    } catch (\Exception $e) {
-        return response()->json(['error' => $e->getMessage()]);
-    }
-});
-
-// Debug bank accounts endpoint
-Route::get('/debug/bank-accounts', function () {
-    try {
-        $user = \App\Models\User::where('uuid', 'e4fcfcba-63bc-41ff-a36c-11c6e57d16f8')->first();
-        if (!$user) {
-            return response()->json(['error' => 'User not found']);
-        }
-        
-        $store = \App\Models\Store::where('user_id', $user->uuid)->first();
-        if (!$store) {
-            return response()->json(['error' => 'Store not found']);
-        }
-        
-        $bankAccounts = \App\Models\BankAccount::where('store_uuid', $store->uuid)->get();
-        return response()->json([
-            'user' => $user->uuid,
-            'store' => $store->uuid,
-            'bank_accounts' => $bankAccounts
-        ]);
-    } catch (\Exception $e) {
-        return response()->json(['error' => $e->getMessage()]);
-    }
-});
-
-// Test registration endpoint
-Route::post('/test-register', function (Request $request) {
-    return response()->json([
-        'message' => 'Test register endpoint working!',
-        'data' => $request->all()
-    ]);
-});
-
-// Test Session Endpoint
-Route::middleware('web')->get('/test-session', function (Request $request) {
-    // Force session start
+    
     $request->session()->put('test_key', 'test_value_' . time());
     $request->session()->save();
 
-    // Check auth status
     $webUser = auth('web')->user();
     $sanctumUser = auth('sanctum')->user();
     $defaultUser = auth()->user();
@@ -188,105 +122,125 @@ Route::middleware('web')->get('/test-session', function (Request $request) {
         'success' => true,
         'message' => 'Session test',
         'session_id' => session()->getId(),
-        'session_data' => $request->session()->all(),
         'session_driver' => config('session.driver'),
         'session_domain' => config('session.domain'),
-        'session_cookie_name' => config('session.cookie'),
-        'session_secure' => config('session.secure'),
-        'session_same_site' => config('session.same_site'),
         'has_session' => $request->hasSession(),
-        'cookies_in_request' => $request->cookies->all(),
         'auth_status' => [
-            'web_guard' => [
-                'check' => auth('web')->check(),
-                'user_id' => $webUser ? $webUser->id : null,
-            ],
-            'sanctum_guard' => [
-                'check' => auth('sanctum')->check(),
-                'user_id' => $sanctumUser ? $sanctumUser->id : null,
-            ],
-            'default_guard' => [
-                'check' => auth()->check(),
-                'user_id' => $defaultUser ? $defaultUser->id : null,
-            ],
+            'web_guard' => ['check' => auth('web')->check()],
+            'sanctum_guard' => ['check' => auth('sanctum')->check()],
+            'default_guard' => ['check' => auth()->check()],
         ],
     ]);
 });
 
-// Public Auth Routes (with web middleware for session support)
-Route::middleware('web')->group(function () {
+// ============================================================================
+// AUTHENTICATION ROUTES (Strict Rate Limiting)
+// ============================================================================
+Route::middleware(['web', 'throttle:auth'])->group(function () {
+    Route::post('/auth/login', [AuthController::class, 'login']);
+    Route::post('/login', [AuthController::class, 'login'])->name('api.login');
+});
+
+Route::middleware(['web', 'throttle:register'])->group(function () {
     Route::post('/auth/register', [AuthController::class, 'register']);
+});
+
+Route::middleware(['web', 'throttle:otp'])->group(function () {
     Route::post('/auth/verify-email', [AuthController::class, 'verifyEmail']);
     Route::post('/auth/resend-verification', [AuthController::class, 'resendVerification']);
-    Route::post('/auth/login', [AuthController::class, 'login']);
+});
+
+Route::middleware(['web', 'throttle:password-reset'])->group(function () {
     Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/auth/reset-password', [AuthController::class, 'resetPassword']);
 });
 
+// ============================================================================
+// PUBLIC ROUTES (Rate Limited)
+// ============================================================================
+
 // Public: Subdomain availability (no auth required)
-Route::get('/stores/check-subdomain', [StoreController::class, 'checkSubdomain']);
+Route::middleware('throttle:api')->get('/stores/check-subdomain', [StoreController::class, 'checkSubdomain']);
 
 // Public: Location API (no auth required)
-Route::get('/locations/cities', [LocationController::class, 'getCities']);
-Route::get('/locations/provinces', [LocationController::class, 'getProvinces']);
+Route::middleware('throttle:api')->group(function () {
+    Route::get('/locations/cities', [LocationController::class, 'getCities']);
+    Route::get('/locations/provinces', [LocationController::class, 'getProvinces']);
+});
 
 // Note: Image serving is handled by routes/web.php at /storage/{path}
 // This allows images to be accessed at https://api.aidareu.com/storage/...
 // without requiring /api/ prefix
 
 // Public: Categories API (no auth required)
-Route::get('/public/categories', [CategoryController::class, 'getActiveCategories']);
+Route::middleware('throttle:api')->get('/public/categories', [CategoryController::class, 'getActiveCategories']);
 
 // Public: Shipping API (no auth required)
-Route::post('/shipping/calculate', [ShippingController::class, 'calculate']);
+Route::middleware('throttle:api')->post('/shipping/calculate', [ShippingController::class, 'calculate']);
 
 // Public: Bank Accounts API (no auth required) - for checkout flow
-Route::get('/stores/{storeUuid}/bank-accounts', [BankAccountController::class, 'getByStore']);
+Route::middleware('throttle:api')->get('/stores/{storeUuid}/bank-accounts', [BankAccountController::class, 'getByStore']);
 
 // Public: Checkout API (no auth required)
-Route::post('/checkout', [CheckoutController::class, 'processCheckout']);
-Route::get('/order/{uuid}', [CheckoutController::class, 'getOrder']);
-Route::get('/stores/{storeUuid}/orders', [CheckoutController::class, 'getStoreOrders']);
-Route::put('/order/{uuid}/status', [CheckoutController::class, 'updateOrderStatus']);
+Route::middleware('throttle:api')->group(function () {
+    Route::post('/checkout', [CheckoutController::class, 'processCheckout']);
+    Route::get('/order/{uuid}', [CheckoutController::class, 'getOrder']);
+    Route::get('/stores/{storeUuid}/orders', [CheckoutController::class, 'getStoreOrders']);
+    Route::put('/order/{uuid}/status', [CheckoutController::class, 'updateOrderStatus']);
+});
 
 // Public: Customer API (no auth required)
-Route::get('/stores/{storeUuid}/customers', [CustomerController::class, 'index']);
+Route::middleware('throttle:api')->group(function () {
+    Route::get('/stores/{storeUuid}/customers', [CustomerController::class, 'index']);
+    Route::get('/customers', [CustomerManagementController::class, 'index']);
+    Route::get('/customers/{uuid}', [CustomerController::class, 'show']);
+    Route::post('/customers', [CustomerController::class, 'store']);
+    Route::put('/customers/{uuid}', [CustomerController::class, 'update']);
+    Route::delete('/customers/{uuid}', [CustomerController::class, 'destroy']);
+});
 
-// Master Data: All Customers (for admin) - must be before {uuid} routes
-Route::get('/customers', [CustomerManagementController::class, 'index']);
-Route::get('/customers/{uuid}', [CustomerController::class, 'show']);
-Route::post('/customers', [CustomerController::class, 'store']);
-Route::put('/customers/{uuid}', [CustomerController::class, 'update']);
-Route::delete('/customers/{uuid}', [CustomerController::class, 'destroy']);
+// Master Data: User Management (should be protected - moved to authenticated routes)
+Route::middleware(['throttle:api', 'web', 'auth:web,sanctum'])->group(function () {
+    Route::get('/management/users', [UserManagementController::class, 'index']);
+    Route::get('/management/users/{uuid}', [UserManagementController::class, 'show']);
+    Route::post('/management/users', [UserManagementController::class, 'store']);
+    Route::put('/management/users/{uuid}', [UserManagementController::class, 'update']);
+    Route::delete('/management/users/{uuid}', [UserManagementController::class, 'destroy']);
+});
 
-// Master Data: User Management
-Route::get('/management/users', [UserManagementController::class, 'index']);
-Route::get('/management/users/{uuid}', [UserManagementController::class, 'show']);
-Route::post('/management/users', [UserManagementController::class, 'store']);
-Route::put('/management/users/{uuid}', [UserManagementController::class, 'update']);
-Route::delete('/management/users/{uuid}', [UserManagementController::class, 'destroy']);
+// Public: Products API (rate limited)
+Route::middleware('throttle:api')->group(function () {
+    Route::get('/public/products', [ProductController::class, 'index']);
+    Route::get('/public/products/{product}', [ProductController::class, 'show']);
+});
 
+// Protected: Product Write Operations (require auth)
+Route::middleware(['throttle:api', 'web', 'auth:web,sanctum'])->group(function () {
+    Route::post('/public/products', [ProductController::class, 'store']);
+    Route::put('/public/products/{product}', [ProductController::class, 'update']);
+    Route::post('/public/products/{product}', [ProductController::class, 'update']);
+    Route::delete('/public/products/{product}', [ProductController::class, 'destroy']);
+});
 
+// Public: Products Digital API (rate limited)
+Route::middleware('throttle:api')->group(function () {
+    Route::get('/public/products-digital', [ProductDigitalController::class, 'index']);
+    Route::get('/public/products-digital/categories', [ProductDigitalController::class, 'getCategories']);
+    Route::get('/public/products-digital/{uuid}', [ProductDigitalController::class, 'show']);
+});
 
-// Public: Products API (no auth required for testing)
-Route::get('/public/products', [ProductController::class, 'index']);
-Route::post('/public/products', [ProductController::class, 'store']);
-Route::get('/public/products/{product}', [ProductController::class, 'show']);
-Route::put('/public/products/{product}', [ProductController::class, 'update']);
-Route::post('/public/products/{product}', [ProductController::class, 'update']); // Handle POST with _method=PUT
-Route::delete('/public/products/{product}', [ProductController::class, 'destroy']);
+// Protected: Digital Product Write Operations (require auth)
+Route::middleware(['throttle:api', 'web', 'auth:web,sanctum'])->group(function () {
+    Route::post('/public/products-digital', [ProductDigitalController::class, 'store']);
+    Route::put('/public/products-digital/{uuid}', [ProductDigitalController::class, 'update']);
+    Route::post('/public/products-digital/{uuid}', [ProductDigitalController::class, 'update']);
+    Route::delete('/public/products-digital/{uuid}', [ProductDigitalController::class, 'destroy']);
+});
 
-// Public: Products Digital API (no auth required for testing)
-Route::get('/public/products-digital', [ProductDigitalController::class, 'index']);
-Route::get('/public/products-digital/categories', [ProductDigitalController::class, 'getCategories']);
-Route::post('/public/products-digital', [ProductDigitalController::class, 'store']);
-Route::get('/public/products-digital/{uuid}', [ProductDigitalController::class, 'show']);
-Route::put('/public/products-digital/{uuid}', [ProductDigitalController::class, 'update']);
-Route::post('/public/products-digital/{uuid}', [ProductDigitalController::class, 'update']); // Handle POST with _method=PUT
-Route::delete('/public/products-digital/{uuid}', [ProductDigitalController::class, 'destroy']);
-
-// Public: Editor Image Upload (no auth required for testing)
-Route::post('/upload-editor-image', [EditorImageController::class, 'upload']);
+// Protected: Editor Image Upload (require auth + rate limited)
+Route::middleware(['throttle:upload', 'web', 'auth:web,sanctum'])->group(function () {
+    Route::post('/upload-editor-image', [EditorImageController::class, 'upload']);
+});
 Route::options('/upload-editor-image', function() {
     return response()->json(['status' => 'OK'])
         ->header('Access-Control-Allow-Origin', '*')
@@ -294,25 +248,26 @@ Route::options('/upload-editor-image', function() {
         ->header('Access-Control-Allow-Headers', 'Content-Type, Accept, Authorization, X-Requested-With');
 });
 
-// Public: User API for testing (no auth required)
-// Route::get('/users/me', [UserController::class, 'me']); // MOVED TO AUTHENTICATED ROUTES
-Route::put('/users/{uuid}', [UserController::class, 'update']);
+// Protected: User API (require auth)
+Route::middleware(['throttle:api', 'web', 'auth:web,sanctum'])->group(function () {
+    Route::put('/users/{uuid}', [UserController::class, 'update']);
+});
 
-// Public: Dashboard API for testing (no auth required)
-Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
-Route::get('/dashboard/revenue', [DashboardController::class, 'revenue']);
-Route::get('/dashboard/popular-products', [DashboardController::class, 'popularProducts']);
-Route::get('/dashboard/recent-orders', [DashboardController::class, 'recentOrders']);
-Route::get('/dashboard/customers', [DashboardController::class, 'customers']);
+// Public: Dashboard API (rate limited)
+Route::middleware('throttle:api')->group(function () {
+    Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
+    Route::get('/dashboard/revenue', [DashboardController::class, 'revenue']);
+    Route::get('/dashboard/popular-products', [DashboardController::class, 'popularProducts']);
+    Route::get('/dashboard/recent-orders', [DashboardController::class, 'recentOrders']);
+    Route::get('/dashboard/customers', [DashboardController::class, 'customers']);
+    Route::get('/dashboard/stats/all', [DashboardController::class, 'statsAll']);
+    Route::get('/dashboard/revenue/all', [DashboardController::class, 'revenueAll']);
+    Route::get('/dashboard/popular-products/all', [DashboardController::class, 'popularProductsAll']);
+    Route::get('/dashboard/popular-stores/all', [DashboardController::class, 'popularStoresAll']);
+});
 
-// Public: Dashboard All Stores API (aggregate data from all stores)
-Route::get('/dashboard/stats/all', [DashboardController::class, 'statsAll']);
-Route::get('/dashboard/revenue/all', [DashboardController::class, 'revenueAll']);
-Route::get('/dashboard/popular-products/all', [DashboardController::class, 'popularProductsAll']);
-Route::get('/dashboard/popular-stores/all', [DashboardController::class, 'popularStoresAll']);
-
-// Public: Notification API (no auth required for testing)
-Route::prefix('notifications')->group(function () {
+// Public: Notification API (rate limited)
+Route::middleware('throttle:api')->prefix('notifications')->group(function () {
     Route::get('/', [NotificationController::class, 'index']);
     Route::get('/unread', [NotificationController::class, 'unread']);
     Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
@@ -321,38 +276,51 @@ Route::prefix('notifications')->group(function () {
     Route::delete('/{id}', [NotificationController::class, 'destroy']);
 });
 
-// Public: Alternative API endpoints for frontend (no auth required)
-Route::get('/public/stores', [\App\Http\Controllers\StoreController::class, 'index']);
-Route::get('/public/stores/{uuid}', [\App\Http\Controllers\StoreController::class, 'show']);
-Route::get('/public/stores/by-domain/{domain}', [\App\Http\Controllers\StoreController::class, 'getByDomain']);
+// Public: Store API (rate limited)
+Route::middleware('throttle:api')->group(function () {
+    Route::get('/public/stores', [\App\Http\Controllers\StoreController::class, 'index']);
+    Route::get('/public/stores/{uuid}', [\App\Http\Controllers\StoreController::class, 'show']);
+    Route::get('/public/stores/by-domain/{domain}', [\App\Http\Controllers\StoreController::class, 'getByDomain']);
+    Route::get('/stores', [\App\Http\Controllers\StoreController::class, 'index']);
+    Route::get('/pixel-stores', [\App\Http\Controllers\Api\PixelStoreController::class, 'index']);
+    Route::get('/landing-pages/{id}', [LandingPageController::class, 'showById']);
+    Route::get('/public/social-media', [\App\Http\Controllers\Api\SocialMediaController::class, 'userIndex']);
+    Route::get('/public/bank-accounts', [\App\Http\Controllers\Api\BankAccountController::class, 'userIndex']);
+});
 
-// Frontend-expected endpoints (for authenticated use)
-Route::get('/stores', [\App\Http\Controllers\StoreController::class, 'index']);
-Route::get('/pixel-stores', [\App\Http\Controllers\Api\PixelStoreController::class, 'index']);
-Route::get('/landing-pages/{id}', [LandingPageController::class, 'showById']);
-Route::get('/public/social-media', [\App\Http\Controllers\Api\SocialMediaController::class, 'userIndex']);
-Route::get('/public/bank-accounts', [\App\Http\Controllers\Api\BankAccountController::class, 'userIndex']);
-Route::post('/public/social-media', [\App\Http\Controllers\Api\SocialMediaController::class, 'userStore']);
-Route::put('/public/social-media/{socialMedia}', [\App\Http\Controllers\Api\SocialMediaController::class, 'userUpdate']);
-Route::post('/public/bank-accounts', [\App\Http\Controllers\Api\BankAccountController::class, 'userStore']);
-Route::put('/public/bank-accounts/{bankAccount}', [\App\Http\Controllers\Api\BankAccountController::class, 'userUpdate']);
-Route::delete('/public/bank-accounts/{bankAccount}', [\App\Http\Controllers\Api\BankAccountController::class, 'userDestroy']);
+// Protected: Social Media & Bank Account Write Operations
+Route::middleware(['throttle:api', 'web', 'auth:web,sanctum'])->group(function () {
+    Route::post('/public/social-media', [\App\Http\Controllers\Api\SocialMediaController::class, 'userStore']);
+    Route::put('/public/social-media/{socialMedia}', [\App\Http\Controllers\Api\SocialMediaController::class, 'userUpdate']);
+    Route::post('/public/bank-accounts', [\App\Http\Controllers\Api\BankAccountController::class, 'userStore']);
+    Route::put('/public/bank-accounts/{bankAccount}', [\App\Http\Controllers\Api\BankAccountController::class, 'userUpdate']);
+    Route::delete('/public/bank-accounts/{bankAccount}', [\App\Http\Controllers\Api\BankAccountController::class, 'userDestroy']);
+});
 
-// Public: Pixel Store API (no auth required)
-Route::get('/public/pixel-stores', [\App\Http\Controllers\Api\PixelStoreController::class, 'index']);
-Route::post('/public/pixel-stores', [\App\Http\Controllers\Api\PixelStoreController::class, 'store']);
-Route::put('/public/pixel-stores/{pixelUuid}', [\App\Http\Controllers\Api\PixelStoreController::class, 'update']);
-Route::delete('/public/pixel-stores/{pixelUuid}', [\App\Http\Controllers\Api\PixelStoreController::class, 'destroy']);
-Route::put('/public/stores/{uuid}', [\App\Http\Controllers\StoreController::class, 'update']);
+// Public: Pixel Store API (rate limited)
+Route::middleware('throttle:api')->group(function () {
+    Route::get('/public/pixel-stores', [\App\Http\Controllers\Api\PixelStoreController::class, 'index']);
+});
+
+// Protected: Pixel Store Write Operations
+Route::middleware(['throttle:api', 'web', 'auth:web,sanctum'])->group(function () {
+    Route::post('/public/pixel-stores', [\App\Http\Controllers\Api\PixelStoreController::class, 'store']);
+    Route::put('/public/pixel-stores/{pixelUuid}', [\App\Http\Controllers\Api\PixelStoreController::class, 'update']);
+    Route::delete('/public/pixel-stores/{pixelUuid}', [\App\Http\Controllers\Api\PixelStoreController::class, 'destroy']);
+    Route::put('/public/stores/{uuid}', [\App\Http\Controllers\StoreController::class, 'update']);
+});
 
 // Auth (session-based) - Legacy
-Route::middleware('web')->group(function () {
-    Route::post('/login', [AuthController::class, 'login'])->name('api.login');
+Route::middleware(['web', 'throttle:auth'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('api.logout');
 });
 
+// ============================================================================
+// AUTHENTICATED ROUTES (Rate Limited)
+// ============================================================================
+
 // Authenticated routes (web guard first for session-based auth)
-Route::middleware(['web', 'auth:web,sanctum'])->group(function () {
+Route::middleware(['web', 'auth:web,sanctum', 'throttle:api'])->group(function () {
     // User info
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
@@ -396,7 +364,6 @@ Route::middleware(['web', 'auth:web,sanctum'])->group(function () {
         Route::get('/test', [StoreController::class, 'test']);
         Route::get('/', [StoreController::class, 'index']);
         Route::post('/', [StoreController::class, 'store']);
-        // Removed GET /stores/check-subdomain from protected routes (now public above)
         Route::get('/{uuid}', [StoreController::class, 'show']);
         Route::put('/{uuid}', [StoreController::class, 'update']);
         Route::delete('/{uuid}', [StoreController::class, 'destroy']);
@@ -463,24 +430,28 @@ Route::middleware(['web', 'auth:web,sanctum'])->group(function () {
 });
 
 // Public
-Route::get('/landing/slug/{slug}', [LandingPageController::class, 'showBySlug']);
+Route::middleware('throttle:api')->get('/landing/slug/{slug}', [LandingPageController::class, 'showBySlug']);
 
 // Public: Theme Settings API (no auth required for public store view)
-Route::get('/theme-settings', [SettingTokoController::class, 'index']);
+Route::middleware('throttle:api')->get('/theme-settings', [SettingTokoController::class, 'index']);
 
 // Public: Get store by subdomain with all data
-Route::get('/store/{subdomain}', [SettingTokoController::class, 'getStoreBySubdomain']);
+Route::middleware('throttle:api')->get('/store/{subdomain}', [SettingTokoController::class, 'getStoreBySubdomain']);
 
 // Public: AI Download Routes (backup - primary access via /storage/ URL with nginx CORS)
-// These endpoints are fallback if nginx CORS doesn't work
-Route::get('/ai/logo/download/{filename}', [AIController::class, 'downloadLogo']);
-Route::get('/ai/product-photo/download/{filename}', [AIProductPhotoController::class, 'downloadProductPhoto']);
-Route::get('/ai/merged-photo/download/{filename}', [AIMergePhotoController::class, 'downloadMergedPhoto']);
-Route::get('/ai/fashion-photo/download/{filename}', [AIFashionPhotoController::class, 'downloadFashionPhoto']);
+Route::middleware('throttle:api')->group(function () {
+    Route::get('/ai/logo/download/{filename}', [AIController::class, 'downloadLogo']);
+    Route::get('/ai/product-photo/download/{filename}', [AIProductPhotoController::class, 'downloadProductPhoto']);
+    Route::get('/ai/merged-photo/download/{filename}', [AIMergePhotoController::class, 'downloadMergedPhoto']);
+    Route::get('/ai/fashion-photo/download/{filename}', [AIFashionPhotoController::class, 'downloadFashionPhoto']);
+});
+
+// ============================================================================
+// PROTECTED ROUTES WITH SPECIFIC RATE LIMITING
+// ============================================================================
 
 // Protected: Theme Settings Management
-// NOTE: OPTIONS preflight requests are handled by ForceJsonResponse middleware
-Route::middleware(['web', 'auth:web,sanctum'])->group(function () {
+Route::middleware(['web', 'auth:web,sanctum', 'throttle:api'])->group(function () {
     Route::post('/theme-settings/general', [SettingTokoController::class, 'updateGeneral']);
     Route::post('/theme-settings/slides', [SettingTokoController::class, 'updateSlides']);
     Route::post('/theme-settings/faq', [SettingTokoController::class, 'createFaq']);
@@ -490,68 +461,78 @@ Route::middleware(['web', 'auth:web,sanctum'])->group(function () {
     Route::put('/theme-settings/testimonial/{uuid}', [SettingTokoController::class, 'updateTestimonial']);
     Route::delete('/theme-settings/testimonial/{uuid}', [SettingTokoController::class, 'deleteTestimonial']);
     Route::post('/theme-settings/seo', [SettingTokoController::class, 'updateSeo']);
+});
 
-    // AI Branding Routes (protected - require auth)
-    Route::prefix('ai')->group(function () {
-        Route::get('/test', [AIController::class, 'testEndpoint']);
-        Route::post('/generate-logo', [AIController::class, 'generateLogo']);
-        Route::post('/refine-logo', [AIController::class, 'refineLogo']);
+// ============================================================================
+// AI BRANDING ROUTES (Protected + AI Rate Limiting)
+// ============================================================================
+Route::middleware(['web', 'auth:web,sanctum', 'throttle:ai-generation'])->prefix('ai')->group(function () {
+    Route::get('/test', [AIController::class, 'testEndpoint']);
+    Route::post('/generate-logo', [AIController::class, 'generateLogo']);
+    Route::post('/refine-logo', [AIController::class, 'refineLogo']);
 
-        // AI Product Photo Routes
-        Route::get('/product-photo/test', [AIProductPhotoController::class, 'testEndpoint']);
-        Route::post('/generate-product-photo', [AIProductPhotoController::class, 'generateProductPhoto']);
+    // AI Product Photo Routes
+    Route::get('/product-photo/test', [AIProductPhotoController::class, 'testEndpoint']);
+    Route::post('/generate-product-photo', [AIProductPhotoController::class, 'generateProductPhoto']);
 
-        // AI Merge Photo Routes
-        Route::get('/merge-photo/test', [AIMergePhotoController::class, 'testEndpoint']);
-        Route::post('/generate-merged-photo', [AIMergePhotoController::class, 'generateMergedPhoto']);
-        Route::post('/generate-instruction', [AIMergePhotoController::class, 'generateInstruction']);
+    // AI Merge Photo Routes
+    Route::get('/merge-photo/test', [AIMergePhotoController::class, 'testEndpoint']);
+    Route::post('/generate-merged-photo', [AIMergePhotoController::class, 'generateMergedPhoto']);
+    Route::post('/generate-instruction', [AIMergePhotoController::class, 'generateInstruction']);
 
-        // AI Fashion Photo Routes
-        Route::get('/fashion-photo/test', [AIFashionPhotoController::class, 'testEndpoint']);
-        Route::post('/generate-fashion-photo', [AIFashionPhotoController::class, 'generateFashionPhoto']);
+    // AI Fashion Photo Routes
+    Route::get('/fashion-photo/test', [AIFashionPhotoController::class, 'testEndpoint']);
+    Route::post('/generate-fashion-photo', [AIFashionPhotoController::class, 'generateFashionPhoto']);
 
-        // AI Landing Page Generation (with coin system)
-        Route::post('/generate-landing-page', [LandingPageController::class, 'generateWithCoin']);
-    });
+    // AI Landing Page Generation (with coin system)
+    Route::post('/generate-landing-page', [LandingPageController::class, 'generateWithCoin']);
+});
 
-    // Coin Transaction Routes (protected - require auth)
-    Route::prefix('coins')->group(function () {
-        Route::get('/', [CoinTransactionController::class, 'index']);
-        Route::get('/summary', [CoinTransactionController::class, 'summary']);
-        Route::post('/', [CoinTransactionController::class, 'store']);
-        Route::get('/export', [CoinTransactionController::class, 'export']);
-    });
+// ============================================================================
+// COIN TRANSACTION ROUTES (Protected)
+// ============================================================================
+Route::middleware(['web', 'auth:web,sanctum', 'throttle:api'])->prefix('coins')->group(function () {
+    Route::get('/', [CoinTransactionController::class, 'index']);
+    Route::get('/summary', [CoinTransactionController::class, 'summary']);
+    Route::post('/', [CoinTransactionController::class, 'store']);
+    Route::get('/export', [CoinTransactionController::class, 'export']);
+});
 
-    // Duitku Payment Routes (protected - require auth)
-    Route::prefix('payment/duitku')->group(function () {
-        Route::post('/create', [\App\Http\Controllers\Api\DuitkuController::class, 'createPayment']);
-        Route::get('/status/{merchantOrderId}', [\App\Http\Controllers\Api\DuitkuController::class, 'checkStatus']);
-    });
+// ============================================================================
+// PAYMENT ROUTES (Protected + Payment Rate Limiting)
+// ============================================================================
+Route::middleware(['web', 'auth:web,sanctum', 'throttle:payment'])->prefix('payment/duitku')->group(function () {
+    Route::post('/create', [\App\Http\Controllers\Api\DuitkuController::class, 'createPayment']);
+    Route::get('/status/{merchantOrderId}', [\App\Http\Controllers\Api\DuitkuController::class, 'checkStatus']);
+});
 
-    // AI Generation History Routes (protected - require auth)
-    Route::prefix('ai-history')->group(function () {
-        Route::get('/', [\App\Http\Controllers\AiGenerationHistoryController::class, 'index']);
-        Route::get('/check-coin', [\App\Http\Controllers\AiGenerationHistoryController::class, 'checkCoin']);
-        Route::post('/', [\App\Http\Controllers\AiGenerationHistoryController::class, 'store']);
-        Route::delete('/{id}', [\App\Http\Controllers\AiGenerationHistoryController::class, 'destroy']);
-    });
+// ============================================================================
+// AI GENERATION HISTORY ROUTES (Protected)
+// ============================================================================
+Route::middleware(['web', 'auth:web,sanctum', 'throttle:api'])->prefix('ai-history')->group(function () {
+    Route::get('/', [\App\Http\Controllers\AiGenerationHistoryController::class, 'index']);
+    Route::get('/check-coin', [\App\Http\Controllers\AiGenerationHistoryController::class, 'checkCoin']);
+    Route::post('/', [\App\Http\Controllers\AiGenerationHistoryController::class, 'store']);
+    Route::delete('/{id}', [\App\Http\Controllers\AiGenerationHistoryController::class, 'destroy']);
+});
 
-    // Landing Page Routes (protected - require auth)
-    Route::prefix('landing')->group(function () {
-        Route::post('/generate', [LandingPageController::class, 'generate']);
-        Route::post('/', [LandingPageController::class, 'store']);
-        Route::get('/', [LandingPageController::class, 'index']);
-        Route::get('/test-openai', [LandingPageController::class, 'testOpenAI']);
+// ============================================================================
+// LANDING PAGE ROUTES (Protected)
+// ============================================================================
+Route::middleware(['web', 'auth:web,sanctum', 'throttle:api'])->prefix('landing')->group(function () {
+    Route::post('/generate', [LandingPageController::class, 'generate']);
+    Route::post('/', [LandingPageController::class, 'store']);
+    Route::get('/', [LandingPageController::class, 'index']);
+    Route::get('/test-openai', [LandingPageController::class, 'testOpenAI']);
 
-        Route::post('/{landing}/update', [LandingPageController::class, 'update']);
-        Route::get('/{landing}', [LandingPageController::class, 'showById']);
-        Route::delete('/{landing}', [LandingPageController::class, 'destroy']);
-        Route::post('/{landing}/duplicate', [LandingPageController::class, 'duplicate']);
+    Route::post('/{landing}/update', [LandingPageController::class, 'update']);
+    Route::get('/{landing}', [LandingPageController::class, 'showById']);
+    Route::delete('/{landing}', [LandingPageController::class, 'destroy']);
+    Route::post('/{landing}/duplicate', [LandingPageController::class, 'duplicate']);
 
-        Route::get('/uuid/{uuid}', [LandingPageController::class, 'showByUuid']);
-        Route::post('/uuid/{uuid}/update', [LandingPageController::class, 'updateByUuid']);
-        Route::delete('/uuid/{uuid}', [LandingPageController::class, 'destroyByUuid']);
-        Route::post('/uuid/{uuid}/duplicate', [LandingPageController::class, 'duplicateByUuid']);
-        Route::get('/uuid/{uuid}/images', [LandingPageController::class, 'getConsistentImages']);
-    });
+    Route::get('/uuid/{uuid}', [LandingPageController::class, 'showByUuid']);
+    Route::post('/uuid/{uuid}/update', [LandingPageController::class, 'updateByUuid']);
+    Route::delete('/uuid/{uuid}', [LandingPageController::class, 'destroyByUuid']);
+    Route::post('/uuid/{uuid}/duplicate', [LandingPageController::class, 'duplicateByUuid']);
+    Route::get('/uuid/{uuid}/images', [LandingPageController::class, 'getConsistentImages']);
 });

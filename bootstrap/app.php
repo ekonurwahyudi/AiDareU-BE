@@ -5,6 +5,8 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\HandleCors;
 use App\Http\Middleware\CompressResponse;
+use App\Http\Middleware\SecurityHeaders;
+use App\Http\Middleware\SecurityLogger;
 // use App\Http\Middleware\ForceJsonResponse; // DISABLED: Causes issues with subdomain routing
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -18,13 +20,20 @@ return Application::configure(basePath: dirname(__DIR__))
         // Enable CORS with highest priority using config/cors.php
         $middleware->prepend(HandleCors::class);
 
+        // Add security headers to all responses
+        $middleware->append(SecurityHeaders::class);
+
         // Add compression for API routes only
-        // NOTE: ForceJsonResponse disabled - it was interfering with subdomain routing
-        // $middleware->appendToGroup('api', ForceJsonResponse::class);
         $middleware->appendToGroup('api', CompressResponse::class);
+        
+        // Add security logging for API routes
+        $middleware->appendToGroup('api', SecurityLogger::class);
 
         // Disable CSRF protection for API endpoints since we're using session-based API auth from frontend
-        // For production, prefer Sanctum + CSRF cookie flow instead of disabling globally.
+        // SECURITY NOTE: API routes are protected by:
+        // 1. Rate limiting (throttle middleware)
+        // 2. Authentication (auth:web,sanctum middleware)
+        // 3. Security logging (SecurityLogger middleware)
         $middleware->validateCsrfTokens(
             except: [
                 'api/*',
