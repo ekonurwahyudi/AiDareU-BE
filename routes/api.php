@@ -179,6 +179,11 @@ Route::middleware('web')->get('/test-session', function (Request $request) {
     $request->session()->put('test_key', 'test_value_' . time());
     $request->session()->save();
 
+    // Check auth status
+    $webUser = auth('web')->user();
+    $sanctumUser = auth('sanctum')->user();
+    $defaultUser = auth()->user();
+
     return response()->json([
         'success' => true,
         'message' => 'Session test',
@@ -191,6 +196,20 @@ Route::middleware('web')->get('/test-session', function (Request $request) {
         'session_same_site' => config('session.same_site'),
         'has_session' => $request->hasSession(),
         'cookies_in_request' => $request->cookies->all(),
+        'auth_status' => [
+            'web_guard' => [
+                'check' => auth('web')->check(),
+                'user_id' => $webUser ? $webUser->id : null,
+            ],
+            'sanctum_guard' => [
+                'check' => auth('sanctum')->check(),
+                'user_id' => $sanctumUser ? $sanctumUser->id : null,
+            ],
+            'default_guard' => [
+                'check' => auth()->check(),
+                'user_id' => $defaultUser ? $defaultUser->id : null,
+            ],
+        ],
     ]);
 });
 
@@ -332,8 +351,8 @@ Route::middleware('web')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('api.logout');
 });
 
-// Authenticated routes (with development fallback)
-Route::middleware(['auth:sanctum,web'])->group(function () {
+// Authenticated routes (web guard first for session-based auth)
+Route::middleware(['auth:web,sanctum'])->group(function () {
     // User info
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
