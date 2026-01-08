@@ -352,7 +352,7 @@ Route::middleware('web')->group(function () {
 });
 
 // Authenticated routes (web guard first for session-based auth)
-Route::middleware(['auth:web,sanctum'])->group(function () {
+Route::middleware(['web', 'auth:web,sanctum'])->group(function () {
     // User info
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);

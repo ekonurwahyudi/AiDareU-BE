@@ -37,11 +37,22 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions) {
         // Return JSON for unauthenticated API requests instead of redirect
+        // IMPORTANT: This only handles AuthenticationException, not all 401s
         $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, $request) {
             if ($request->is('api/*')) {
+                \Illuminate\Support\Facades\Log::warning('AuthenticationException caught', [
+                    'url' => $request->fullUrl(),
+                    'guards' => $e->guards(),
+                    'message' => $e->getMessage(),
+                ]);
+
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthenticated. Please login first.',
+                    'debug' => config('app.debug') ? [
+                        'guards' => $e->guards(),
+                        'exception' => $e->getMessage(),
+                    ] : null,
                 ], 401);
             }
         });
