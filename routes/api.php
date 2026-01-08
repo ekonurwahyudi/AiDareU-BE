@@ -96,6 +96,9 @@ Route::get('/test-cors', function () {
     ]);
 });
 
+// Duitku Payment Callback (public endpoint - no auth required)
+Route::post('/payment/duitku/callback', [\App\Http\Controllers\Api\DuitkuController::class, 'handleCallback']);
+
 // Debug stores endpoint
 Route::get('/debug/stores', function () {
     try {
@@ -475,6 +478,12 @@ Route::middleware(['auth:sanctum,web'])->group(function () {
         Route::get('/summary', [CoinTransactionController::class, 'summary']);
         Route::post('/', [CoinTransactionController::class, 'store']);
         Route::get('/export', [CoinTransactionController::class, 'export']);
+    });
+
+    // Duitku Payment Routes (protected - require auth)
+    Route::prefix('payment/duitku')->group(function () {
+        Route::post('/create', [\App\Http\Controllers\Api\DuitkuController::class, 'createPayment']);
+        Route::get('/status/{merchantOrderId}', [\App\Http\Controllers\Api\DuitkuController::class, 'checkStatus']);
     });
 
     // AI Generation History Routes (protected - require auth)
