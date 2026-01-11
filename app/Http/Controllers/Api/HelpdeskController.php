@@ -74,14 +74,20 @@ class HelpdeskController extends Controller
     /**
      * Get single ticket detail with all messages
      */
-    public function show($ticketNumber)
+    public function show($identifier)
     {
         try {
             $user = Auth::user();
             $isSuperadmin = $user->hasRole('superadmin');
 
-            $query = Helpdesk::with(['user', 'details.user'])
-                ->where('ticket_number', $ticketNumber);
+            $query = Helpdesk::with(['user', 'details.user']);
+
+            // Check if identifier is UUID or ticket number
+            if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $identifier)) {
+                $query->where('uuid', $identifier);
+            } else {
+                $query->where('ticket_number', $identifier);
+            }
 
             // If not superadmin, must be ticket owner
             if (!$isSuperadmin) {
@@ -107,7 +113,7 @@ class HelpdeskController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Error fetching ticket detail', [
-                'ticket_number' => $ticketNumber,
+                'identifier' => $identifier,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -256,7 +262,7 @@ class HelpdeskController extends Controller
     /**
      * Reply to a ticket
      */
-    public function reply(Request $request, $ticketNumber)
+    public function reply(Request $request, $identifier)
     {
         try {
             $validator = Validator::make($request->all(), [
@@ -280,9 +286,16 @@ class HelpdeskController extends Controller
 
             $user = Auth::user();
 
-            $ticket = Helpdesk::where('ticket_number', $ticketNumber)
-                ->where('user_id', $user->id)
-                ->first();
+            $query = Helpdesk::where('user_id', $user->id);
+
+            // Check if identifier is UUID or ticket number
+            if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $identifier)) {
+                $query->where('uuid', $identifier);
+            } else {
+                $query->where('ticket_number', $identifier);
+            }
+
+            $ticket = $query->first();
 
             if (!$ticket) {
                 return response()->json([
@@ -370,7 +383,7 @@ class HelpdeskController extends Controller
             DB::rollBack();
 
             Log::error('Error replying to ticket', [
-                'ticket_number' => $ticketNumber,
+                'identifier' => $identifier,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -385,14 +398,21 @@ class HelpdeskController extends Controller
     /**
      * Reopen a closed ticket
      */
-    public function reopen($ticketNumber)
+    public function reopen($identifier)
     {
         try {
             $user = Auth::user();
 
-            $ticket = Helpdesk::where('ticket_number', $ticketNumber)
-                ->where('user_id', $user->id)
-                ->first();
+            $query = Helpdesk::where('user_id', $user->id);
+
+            // Check if identifier is UUID or ticket number
+            if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $identifier)) {
+                $query->where('uuid', $identifier);
+            } else {
+                $query->where('ticket_number', $identifier);
+            }
+
+            $ticket = $query->first();
 
             if (!$ticket) {
                 return response()->json([
@@ -423,7 +443,7 @@ class HelpdeskController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Error reopening ticket', [
-                'ticket_number' => $ticketNumber,
+                'identifier' => $identifier,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
