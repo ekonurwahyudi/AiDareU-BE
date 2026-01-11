@@ -17,11 +17,12 @@ return new class extends Migration
             $table->index('helpdesk_uuid');
         });
 
-        // Update existing records to populate helpdesk_uuid from helpdesks table
+        // Update existing records to populate helpdesk_uuid from helpdesks table (PostgreSQL compatible)
         DB::statement('
-            UPDATE helpdesk_details hd
-            INNER JOIN helpdesks h ON hd.helpdesk_id = h.id
-            SET hd.helpdesk_uuid = h.uuid
+            UPDATE helpdesk_details 
+            SET helpdesk_uuid = helpdesks.uuid
+            FROM helpdesks 
+            WHERE helpdesk_details.helpdesk_id = helpdesks.id
         ');
     }
 
