@@ -485,10 +485,10 @@ class HelpdeskController extends Controller
             }
 
             $validator = Validator::make($request->all(), [
-                'status' => 'required|in:open,in_progress,closed',
+                'status' => 'required|in:open,in_progress,waiting_reply,replied,closed',
             ], [
                 'status.required' => 'Status harus diisi',
-                'status.in' => 'Status tidak valid. Pilih: open, in_progress, atau closed',
+                'status.in' => 'Status tidak valid. Pilih: open, in_progress, waiting_reply, replied, atau closed',
             ]);
 
             if ($validator->fails()) {
