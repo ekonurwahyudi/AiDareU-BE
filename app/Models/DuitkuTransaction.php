@@ -9,6 +9,7 @@ class DuitkuTransaction extends Model
 {
     protected $fillable = [
         'user_id',
+        'merchant_code',
         'merchant_order_id',
         'reference',
         'payment_method',

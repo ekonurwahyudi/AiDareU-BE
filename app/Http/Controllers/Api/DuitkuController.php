@@ -10,7 +10,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class DuitkuController extends Controller
 {
@@ -59,8 +58,18 @@ class DuitkuController extends Controller
             // Harga: 5 pts = Rp 5.000, 10 pts = Rp 10.000 (1 coin = Rp 1.000)
             $paymentAmount = $coinAmount * 1000;
 
-            // Generate unique order ID
-            $merchantOrderId = 'TOPUP-' . strtoupper(Str::random(10)) . '-' . time();
+            // Generate unique order ID dengan format: AIDUTP-DDMMYYXXX
+            // Contoh: AIDUTP-011025001 (01 Oct 2025, transaksi ke-1)
+            $date = now();
+            $datePrefix = $date->format('dmy'); // Format: DDMMYY
+
+            // Get sequential number untuk hari ini
+            $todayStart = $date->copy()->startOfDay();
+            $todayEnd = $date->copy()->endOfDay();
+            $todayCount = DuitkuTransaction::whereBetween('created_at', [$todayStart, $todayEnd])->count();
+            $sequentialNumber = str_pad($todayCount + 1, 3, '0', STR_PAD_LEFT);
+
+            $merchantOrderId = 'AIDUTP-' . $datePrefix . $sequentialNumber;
 
             // Generate signature untuk v2/inquiry: MD5(merchantCode + merchantOrderId + paymentAmount + apiKey)
             $signatureString = $this->merchantCode . $merchantOrderId . $paymentAmount . $this->apiKey;
@@ -154,6 +163,7 @@ class DuitkuController extends Controller
             // Save transaction to database
             $transaction = DuitkuTransaction::create([
                 'user_id' => $user->id,
+                'merchant_code' => 'AiDareU',
                 'merchant_order_id' => $merchantOrderId,
                 'reference' => $result['reference'] ?? null,
                 'payment_method' => 'SP', // Shopee Pay QRIS

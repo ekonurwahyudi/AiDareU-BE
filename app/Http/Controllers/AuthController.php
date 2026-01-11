@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -285,7 +286,7 @@ class AuthController extends Controller
             }
 
             // Login user to web session (for session-based auth)
-            auth()->login($user);
+            Auth::login($user);
 
             // Regenerate session ID for security
             $request->session()->regenerate();

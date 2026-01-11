@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\StoreController;
 use App\Http\Controllers\CategoryController;
@@ -114,9 +115,9 @@ Route::middleware(['web', 'throttle:api'])->get('/test-session', function (Reque
     $request->session()->put('test_key', 'test_value_' . time());
     $request->session()->save();
 
-    $webUser = auth('web')->user();
-    $sanctumUser = auth('sanctum')->user();
-    $defaultUser = auth()->user();
+    $webUser = Auth::guard('web')->user();
+    $sanctumUser = Auth::guard('sanctum')->user();
+    $defaultUser = Auth::user();
 
     return response()->json([
         'success' => true,
@@ -126,9 +127,9 @@ Route::middleware(['web', 'throttle:api'])->get('/test-session', function (Reque
         'session_domain' => config('session.domain'),
         'has_session' => $request->hasSession(),
         'auth_status' => [
-            'web_guard' => ['check' => auth('web')->check()],
-            'sanctum_guard' => ['check' => auth('sanctum')->check()],
-            'default_guard' => ['check' => auth()->check()],
+            'web_guard' => ['check' => Auth::guard('web')->check()],
+            'sanctum_guard' => ['check' => Auth::guard('sanctum')->check()],
+            'default_guard' => ['check' => Auth::check()],
         ],
     ]);
 });
