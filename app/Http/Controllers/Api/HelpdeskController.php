@@ -489,6 +489,11 @@ class HelpdeskController extends Controller
             ]);
 
             if ($validator->fails()) {
+                Log::warning('Status validation failed', [
+                    'identifier' => $identifier,
+                    'request_status' => $request->status,
+                    'errors' => $validator->errors()->toArray()
+                ]);
                 return response()->json([
                     'success' => false,
                     'message' => 'Validation error',
@@ -517,7 +522,8 @@ class HelpdeskController extends Controller
             $oldStatus = $ticket->status;
             $newStatus = $request->status;
 
-            $ticket->update(['status' => $newStatus]);
+            $ticket->status = $newStatus;
+            $ticket->save();
 
             Log::info('Helpdesk ticket status updated by superadmin', [
                 'ticket_number' => $ticket->ticket_number,
@@ -535,13 +541,14 @@ class HelpdeskController extends Controller
         } catch (\Exception $e) {
             Log::error('Error updating ticket status', [
                 'identifier' => $identifier,
+                'request_data' => $request->all(),
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update ticket status'
+                'message' => 'Failed to update ticket status: ' . $e->getMessage()
             ], 500);
         }
     }
