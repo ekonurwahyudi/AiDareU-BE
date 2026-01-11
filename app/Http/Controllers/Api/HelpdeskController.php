@@ -57,7 +57,9 @@ class HelpdeskController extends Controller
                 'success' => true,
                 'data' => $tickets,
                 'is_superadmin' => $isSuperadmin
-            ]);
+            ])->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+              ->header('Pragma', 'no-cache')
+              ->header('Expires', '0');
         } catch (\Exception $e) {
             Log::error('Error fetching helpdesk tickets', [
                 'error' => $e->getMessage(),
@@ -370,12 +372,7 @@ class HelpdeskController extends Controller
                 'file_size' => $fileData['file_size'] ?? null,
             ]);
 
-            // Update ticket status based on who replied
-            if ($isSuperadmin) {
-                $ticket->update(['status' => 'replied']);
-            } else {
-                $ticket->update(['status' => 'waiting_reply']);
-            }
+            // Status is now managed manually by superadmin, no auto-update on reply
 
             DB::commit();
 
@@ -485,10 +482,10 @@ class HelpdeskController extends Controller
             }
 
             $validator = Validator::make($request->all(), [
-                'status' => 'required|in:open,in_progress,waiting_reply,replied,closed',
+                'status' => 'required|in:open,in_progress,closed',
             ], [
                 'status.required' => 'Status harus diisi',
-                'status.in' => 'Status tidak valid. Pilih: open, in_progress, waiting_reply, replied, atau closed',
+                'status.in' => 'Status tidak valid. Pilih: open, in_progress, atau closed',
             ]);
 
             if ($validator->fails()) {
