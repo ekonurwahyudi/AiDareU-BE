@@ -35,9 +35,9 @@ class DuitkuController extends Controller
     }
 
     /**
-     * Create Duitku payment transaction (Pop-up)
+     * Create Duitku QRIS payment transaction (Direct)
      * POST /api/payment/duitku/create
-     * Sesuai dokumentasi: https://docs.duitku.com/pop/id/#integrasi-backend-atau-server
+     * Sesuai dokumentasi: https://docs.duitku.com/api/id/#metode-pembayaran
      */
     public function createPayment(Request $request)
     {
@@ -62,25 +62,23 @@ class DuitkuController extends Controller
             // Generate unique order ID
             $merchantOrderId = 'TOPUP-' . strtoupper(Str::random(10)) . '-' . time();
 
-            // Generate timestamp (Jakarta timezone, milliseconds) - UNIX timestamp in milliseconds
-            $timestamp = round(microtime(true) * 1000);
+            // Generate signature untuk v2/inquiry: MD5(merchantCode + merchantOrderId + paymentAmount + apiKey)
+            $signatureString = $this->merchantCode . $merchantOrderId . $paymentAmount . $this->apiKey;
+            $signature = md5($signatureString);
 
-            // Generate signature: SHA256(merchantCode + timestamp + apiKey)
-            // Sesuai dokumentasi Duitku: "Parameter yang berisi hash adalah merchant code, timestamp, kemudian API key dan harus berurutan"
-            // TANPA separator/dash
-            $signatureString = $this->merchantCode . $timestamp . $this->apiKey;
-            $signature = hash('sha256', $signatureString);
-
-            Log::info('Duitku signature generation', [
+            Log::info('Duitku QRIS signature generation', [
                 'merchant_code' => $this->merchantCode,
-                'timestamp' => $timestamp,
-                'signature_string' => $this->merchantCode . $timestamp . '***API_KEY***',
+                'merchant_order_id' => $merchantOrderId,
+                'payment_amount' => $paymentAmount,
+                'signature_string' => $this->merchantCode . $merchantOrderId . $paymentAmount . '***API_KEY***',
                 'signature' => $signature
             ]);
 
-            // Prepare request data for createInvoice sesuai dokumentasi
+            // Prepare request data untuk v2/inquiry (QRIS Direct) sesuai dokumentasi
             $requestData = [
+                'merchantCode' => $this->merchantCode,
                 'paymentAmount' => $paymentAmount,
+                'paymentMethod' => 'SP', // SP = Shopee Pay QRIS (bisa juga NQ, GQ, SQ)
                 'merchantOrderId' => $merchantOrderId,
                 'productDetails' => "Top Up {$coinAmount} Coin AiDareU",
                 'additionalParam' => '',
@@ -100,51 +98,45 @@ class DuitkuController extends Controller
                     'lastName' => '',
                     'email' => $user->email,
                     'phoneNumber' => $user->phone ?? '',
+                    'billingAddress' => [],
+                    'shippingAddress' => []
                 ],
                 'callbackUrl' => url('/api/payment/duitku/callback'),
                 'returnUrl' => env('APP_FRONTEND_URL', 'https://aidareu.com') . '/apps/tokoku/coin-history',
+                'signature' => $signature,
                 'expiryPeriod' => 60, // 60 minutes expiry
             ];
 
-            Log::info('Duitku payment request', [
+            Log::info('Duitku QRIS payment request', [
                 'user_id' => $user->id,
                 'coin_amount' => $coinAmount,
                 'payment_amount' => $paymentAmount,
                 'order_id' => $merchantOrderId,
-                'timestamp' => $timestamp,
                 'sandbox_mode' => $this->sandboxMode,
                 'request_data' => $requestData
             ]);
 
-            // Call Duitku createInvoice API (lowercase 'createinvoice' sesuai dokumentasi)
+            // Call Duitku v2/inquiry API untuk QRIS Direct
             $endpoint = $this->sandboxMode
-                ? 'https://api-sandbox.duitku.com/api/merchant/createinvoice'
-                : 'https://api-prod.duitku.com/api/merchant/createinvoice';
+                ? 'https://sandbox.duitku.com/webapi/api/merchant/v2/inquiry'
+                : 'https://passport.duitku.com/webapi/api/merchant/v2/inquiry';
 
-            Log::info('Duitku API call', [
-                'endpoint' => $endpoint,
-                'headers' => [
-                    'x-duitku-signature' => $signature,
-                    'x-duitku-timestamp' => $timestamp,
-                    'x-duitku-merchantcode' => $this->merchantCode,
-                ]
+            Log::info('Duitku QRIS API call', [
+                'endpoint' => $endpoint
             ]);
 
             $response = Http::withHeaders([
                 'Accept' => 'application/json',
                 'Content-Type' => 'application/json',
-                'x-duitku-signature' => $signature,
-                'x-duitku-timestamp' => (string) $timestamp,
-                'x-duitku-merchantcode' => $this->merchantCode,
             ])->post($endpoint, $requestData);
 
-            Log::info('Duitku API response', [
+            Log::info('Duitku QRIS API response', [
                 'status' => $response->status(),
                 'body' => $response->body()
             ]);
 
             if (!$response->successful()) {
-                Log::error('Duitku API error', [
+                Log::error('Duitku QRIS API error', [
                     'status' => $response->status(),
                     'body' => $response->body()
                 ]);
@@ -164,15 +156,15 @@ class DuitkuController extends Controller
 
             $result = $response->json();
 
-            // Check if response is successful
-            if (!isset($result['reference'])) {
-                Log::error('Duitku transaction failed - no reference', [
+            // Check if response is successful - v2/inquiry mengembalikan statusCode dan qrString
+            if (!isset($result['statusCode']) || $result['statusCode'] !== '00') {
+                Log::error('Duitku QRIS transaction failed', [
                     'response' => $result
                 ]);
 
                 return response()->json([
                     'success' => false,
-                    'message' => $result['Message'] ?? $result['statusMessage'] ?? 'Transaction failed'
+                    'message' => $result['statusMessage'] ?? 'Transaction failed'
                 ], 400);
             }
 
@@ -180,28 +172,31 @@ class DuitkuController extends Controller
             $transaction = DuitkuTransaction::create([
                 'user_id' => $user->id,
                 'merchant_order_id' => $merchantOrderId,
-                'reference' => $result['reference'],
-                'payment_method' => 'POP', // Pop-up method
+                'reference' => $result['reference'] ?? null,
+                'payment_method' => 'SP', // Shopee Pay QRIS
                 'coin_amount' => $coinAmount,
                 'payment_amount' => $paymentAmount,
                 'status' => 'pending',
             ]);
 
-            Log::info('Duitku transaction created', [
+            Log::info('Duitku QRIS transaction created', [
                 'transaction_id' => $transaction->id,
-                'reference' => $result['reference']
+                'reference' => $result['reference'] ?? null,
+                'has_qr_string' => isset($result['qrString'])
             ]);
 
-            // Return reference for pop-up checkout
+            // Return QR string untuk di-render di frontend
             return response()->json([
                 'success' => true,
-                'message' => 'Payment created successfully',
+                'message' => 'QRIS payment created successfully',
                 'data' => [
                     'transaction_id' => $transaction->id,
                     'merchant_order_id' => $merchantOrderId,
-                    'reference' => $result['reference'], // This is the DUITKU_REFERENCE for pop-up
+                    'reference' => $result['reference'] ?? null,
+                    'qr_string' => $result['qrString'] ?? null, // String untuk generate QR code
                     'amount' => $paymentAmount,
                     'coin_amount' => $coinAmount,
+                    'expiry_period' => 60, // minutes
                 ]
             ]);
 
