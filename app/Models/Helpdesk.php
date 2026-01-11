@@ -90,11 +90,11 @@ class Helpdesk extends Model
     }
 
     /**
-     * Scope for open tickets
+     * Scope for open tickets (not closed)
      */
     public function scopeOpen($query)
     {
-        return $query->whereIn('status', ['open', 'waiting_reply', 'replied']);
+        return $query->whereIn('status', ['open', 'in_progress']);
     }
 
     /**

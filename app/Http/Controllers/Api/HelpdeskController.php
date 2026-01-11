@@ -372,7 +372,10 @@ class HelpdeskController extends Controller
                 'file_size' => $fileData['file_size'] ?? null,
             ]);
 
-            // Status is now managed manually by superadmin, no auto-update on reply
+            // Auto update status to in_progress when superadmin replies
+            if ($isSuperadmin && $ticket->status === 'open') {
+                $ticket->update(['status' => 'in_progress']);
+            }
 
             DB::commit();
 
