@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class DuitkuController extends Controller
 {
@@ -19,34 +20,21 @@ class DuitkuController extends Controller
 
     public function __construct()
     {
-        // Ambil dari environment variable
-        // Default: D19704 (sandbox merchant code)
-        $this->merchantCode = env('DUITKU_MERCHANT_CODE', 'D19704');
-        $this->apiKey = env('DUITKU_API_KEY', '5bcc9617d7ed80563ff594335ec4b');
-        // Default: true (sandbox mode)
-        $this->sandboxMode = filter_var(env('DUITKU_SANDBOX', true), FILTER_VALIDATE_BOOLEAN);
-        
-        Log::info('DuitkuController initialized', [
-            'merchant_code' => $this->merchantCode,
-            'api_key_set' => !empty($this->apiKey),
-            'sandbox_mode' => $this->sandboxMode,
-            'endpoint' => $this->sandboxMode 
-                ? 'https://sandbox.duitku.com/webapi/api/merchant/v2/inquiry'
-                : 'https://passport.duitku.com/webapi/api/merchant/v2/inquiry',
-        ]);
+        $this->merchantCode = env('DUITKU_MERCHANT_CODE');
+        $this->apiKey = env('DUITKU_API_KEY');
+        $this->sandboxMode = filter_var(env('DUITKU_SANDBOX', false), FILTER_VALIDATE_BOOLEAN);
     }
 
     /**
      * Create Duitku payment transaction
      * POST /api/payment/duitku/create
-     * Dokumentasi: https://docs.duitku.com/api/id/#permintaan-transaksi
      */
     public function createPayment(Request $request)
     {
         try {
             $request->validate([
                 'coin_amount' => 'required|integer|min:1',
-                'payment_method' => 'nullable|string|max:2', // Optional, default QRIS
+                'payment_method' => 'nullable|string|max:2',
             ]);
 
             /** @var \App\Models\User|null $user */
@@ -59,27 +47,11 @@ class DuitkuController extends Controller
             }
 
             $coinAmount = $request->coin_amount;
-            // Harga: 1 coin = Rp 1.000
             $paymentAmount = $coinAmount * 1000;
-
-            // Payment method: default SP (Shopee Pay QRIS)
             $paymentMethod = $request->payment_method ?? 'SP';
-
-            // Generate unique order ID
             $merchantOrderId = 'AIDUTP' . time() . rand(100, 999);
-
-            // Generate signature: MD5(merchantCode + merchantOrderId + paymentAmount + apiKey)
-            // Sesuai dokumentasi Duitku
             $signature = md5($this->merchantCode . $merchantOrderId . $paymentAmount . $this->apiKey);
 
-            Log::info('Duitku signature generation', [
-                'merchant_code' => $this->merchantCode,
-                'merchant_order_id' => $merchantOrderId,
-                'payment_amount' => $paymentAmount,
-                'signature' => $signature
-            ]);
-
-            // Prepare request data sesuai dokumentasi
             $requestData = [
                 'merchantCode' => $this->merchantCode,
                 'paymentAmount' => $paymentAmount,
@@ -90,95 +62,48 @@ class DuitkuController extends Controller
                 'phoneNumber' => $user->phone ?? '',
                 'additionalParam' => '',
                 'merchantUserInfo' => $user->email,
-                'customerVaName' => substr($user->name ?? 'User', 0, 20), // Max 20 chars
+                'customerVaName' => substr($user->name ?? 'User', 0, 20),
                 'callbackUrl' => url('/api/payment/duitku/callback'),
-                'returnUrl' => env('APP_FRONTEND_URL', 'https://aidareu.com') . '/apps/tokoku/coin-history',
+                'returnUrl' => env('APP_FRONTEND_URL', 'https://aidareu.com') . '/apps/user/coin',
                 'signature' => $signature,
-                'expiryPeriod' => 60, // 60 menit
+                'expiryPeriod' => 60,
+                'itemDetails' => [
+                    ['name' => "Top Up {$coinAmount} Coin", 'price' => $paymentAmount, 'quantity' => 1]
+                ],
+                'customerDetail' => [
+                    'firstName' => $user->name ?? 'User',
+                    'lastName' => '',
+                    'email' => $user->email,
+                    'phoneNumber' => $user->phone ?? '',
+                ],
             ];
 
-            // Item details (opsional tapi bagus untuk tracking)
-            $requestData['itemDetails'] = [
-                [
-                    'name' => "Top Up {$coinAmount} Coin",
-                    'price' => $paymentAmount,
-                    'quantity' => 1
-                ]
-            ];
-
-            // Customer detail
-            $requestData['customerDetail'] = [
-                'firstName' => $user->name ?? 'User',
-                'lastName' => '',
-                'email' => $user->email,
-                'phoneNumber' => $user->phone ?? '',
-            ];
-
-            Log::info('Duitku payment request', [
-                'user_id' => $user->id,
-                'coin_amount' => $coinAmount,
-                'payment_amount' => $paymentAmount,
-                'payment_method' => $paymentMethod,
-                'order_id' => $merchantOrderId,
-                'sandbox_mode' => $this->sandboxMode,
-            ]);
-
-            // Endpoint sesuai dokumentasi
-            // Development: https://sandbox.duitku.com/webapi/api/merchant/v2/inquiry
-            // Production: https://passport.duitku.com/webapi/api/merchant/v2/inquiry
             $endpoint = $this->sandboxMode
                 ? 'https://sandbox.duitku.com/webapi/api/merchant/v2/inquiry'
                 : 'https://passport.duitku.com/webapi/api/merchant/v2/inquiry';
-
-            Log::info('Duitku API call', [
-                'endpoint' => $endpoint,
-                'request_data' => array_merge($requestData, ['signature' => '***HIDDEN***'])
-            ]);
 
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
             ])->post($endpoint, $requestData);
 
-            Log::info('Duitku API response', [
-                'status' => $response->status(),
-                'body' => $response->body()
-            ]);
-
             if (!$response->successful()) {
-                Log::error('Duitku API error', [
-                    'status' => $response->status(),
-                    'body' => $response->body()
-                ]);
-
                 $errorBody = $response->json();
-                $errorMessage = $errorBody['Message'] ?? $errorBody['statusMessage'] ?? 'Payment gateway error';
-
                 return response()->json([
                     'success' => false,
-                    'message' => $errorMessage,
-                    'debug' => [
-                        'status' => $response->status(),
-                        'response' => $response->body()
-                    ]
+                    'message' => $errorBody['Message'] ?? $errorBody['statusMessage'] ?? 'Payment gateway error'
                 ], 500);
             }
 
             $result = $response->json();
 
-            // Check response - statusCode "00" = SUCCESS
             if (!isset($result['statusCode']) || $result['statusCode'] !== '00') {
-                Log::error('Duitku transaction failed', [
-                    'response' => $result
-                ]);
-
                 return response()->json([
                     'success' => false,
-                    'message' => $result['statusMessage'] ?? 'Transaction failed',
-                    'debug' => $result
+                    'message' => $result['statusMessage'] ?? 'Transaction failed'
                 ], 400);
             }
 
-            // Save transaction to database
+            // Save transaction
             $transaction = DuitkuTransaction::create([
                 'user_id' => $user->id,
                 'merchant_order_id' => $merchantOrderId,
@@ -192,12 +117,9 @@ class DuitkuController extends Controller
                 'qr_string' => $result['qrString'] ?? null,
             ]);
 
-            Log::info('Duitku transaction created', [
-                'transaction_id' => $transaction->id,
-                'reference' => $result['reference'] ?? null,
-            ]);
+            // Send payment reminder email
+            $this->sendPaymentReminderEmail($user, $transaction, $paymentAmount, $coinAmount);
 
-            // Return response untuk frontend
             return response()->json([
                 'success' => true,
                 'message' => 'Payment created successfully',
@@ -214,15 +136,84 @@ class DuitkuController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Duitku createPayment error', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
+            Log::error('Duitku createPayment error', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
-                'message' => 'Server error: ' . $e->getMessage()
+                'message' => 'Terjadi kesalahan. Silakan coba lagi.'
             ], 500);
+        }
+    }
+
+    /**
+     * Send payment reminder email
+     */
+    private function sendPaymentReminderEmail($user, $transaction, $paymentAmount, $coinAmount)
+    {
+        try {
+            $frontendUrl = env('APP_FRONTEND_URL', 'https://aidareu.com');
+            
+            Mail::send([], [], function ($message) use ($user, $transaction, $paymentAmount, $coinAmount, $frontendUrl) {
+                $message->to($user->email, $user->name)
+                    ->subject('🔔 Segera Selesaikan Pembayaran Top Up Coin - AiDareU')
+                    ->html("
+                        <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;'>
+                            <div style='text-align: center; margin-bottom: 30px;'>
+                                <h1 style='color: #f59e0b; margin: 0;'>AiDareU</h1>
+                            </div>
+                            
+                            <h2 style='color: #333;'>Halo {$user->name}! 👋</h2>
+                            
+                            <p style='color: #666; font-size: 16px;'>
+                                Anda memiliki transaksi top up coin yang menunggu pembayaran.
+                            </p>
+                            
+                            <div style='background: #FFF7ED; border: 1px solid #FDBA74; border-radius: 8px; padding: 20px; margin: 20px 0;'>
+                                <h3 style='color: #C2410C; margin-top: 0;'>📋 Detail Transaksi</h3>
+                                <table style='width: 100%; border-collapse: collapse;'>
+                                    <tr>
+                                        <td style='padding: 8px 0; color: #666;'>Order ID</td>
+                                        <td style='padding: 8px 0; text-align: right; font-weight: bold;'>{$transaction->merchant_order_id}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style='padding: 8px 0; color: #666;'>Jumlah Coin</td>
+                                        <td style='padding: 8px 0; text-align: right; font-weight: bold;'>{$coinAmount} Pts</td>
+                                    </tr>
+                                    <tr>
+                                        <td style='padding: 8px 0; color: #666;'>Total Pembayaran</td>
+                                        <td style='padding: 8px 0; text-align: right; font-weight: bold; color: #f59e0b; font-size: 18px;'>Rp " . number_format($paymentAmount, 0, ',', '.') . "</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            
+                            <div style='background: #FEF3C7; border-radius: 8px; padding: 15px; margin: 20px 0;'>
+                                <p style='color: #92400E; margin: 0; font-weight: bold;'>
+                                    ⏰ Pembayaran akan kadaluarsa dalam 60 menit!
+                                </p>
+                            </div>
+                            
+                            <p style='color: #666; font-size: 14px;'>
+                                Segera selesaikan pembayaran Anda menggunakan QRIS melalui aplikasi e-wallet favorit Anda (GoPay, OVO, Dana, ShopeePay, dll).
+                            </p>
+                            
+                            <div style='text-align: center; margin: 30px 0;'>
+                                <a href='{$frontendUrl}/apps/user/coin' style='background: #f59e0b; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;'>
+                                    Lihat Riwayat Coin
+                                </a>
+                            </div>
+                            
+                            <hr style='border: none; border-top: 1px solid #eee; margin: 30px 0;'>
+                            
+                            <p style='color: #999; font-size: 12px; text-align: center;'>
+                                Email ini dikirim otomatis oleh sistem AiDareU.<br>
+                                Jika Anda tidak melakukan transaksi ini, abaikan email ini.
+                            </p>
+                        </div>
+                    ");
+            });
+
+            Log::info('Payment reminder email sent', ['user_id' => $user->id, 'order_id' => $transaction->merchant_order_id]);
+        } catch (\Exception $e) {
+            Log::error('Failed to send payment reminder email', ['error' => $e->getMessage()]);
         }
     }
 

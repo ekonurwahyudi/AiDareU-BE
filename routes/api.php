@@ -506,23 +506,6 @@ Route::middleware(['web', 'auth:web,sanctum', 'throttle:payment'])->prefix('paym
     Route::post('/create', [\App\Http\Controllers\Api\DuitkuController::class, 'createPayment']);
     Route::get('/status/{merchantOrderId}', [\App\Http\Controllers\Api\DuitkuController::class, 'checkStatus']);
     Route::get('/methods', [\App\Http\Controllers\Api\DuitkuController::class, 'getPaymentMethods']);
-    
-    // Debug endpoint - untuk cek konfigurasi
-    Route::get('/debug-config', function () {
-        $merchantCode = env('DUITKU_MERCHANT_CODE', 'NOT_SET');
-        $apiKey = env('DUITKU_API_KEY');
-        $sandbox = env('DUITKU_SANDBOX', 'NOT_SET');
-        
-        return response()->json([
-            'merchant_code' => $merchantCode,
-            'api_key_set' => !empty($apiKey),
-            'api_key_preview' => $apiKey ? substr($apiKey, 0, 8) . '****' : 'NOT_SET',
-            'sandbox_mode' => filter_var($sandbox, FILTER_VALIDATE_BOOLEAN),
-            'endpoint' => filter_var($sandbox, FILTER_VALIDATE_BOOLEAN) 
-                ? 'https://sandbox.duitku.com/webapi/api/merchant/v2/inquiry'
-                : 'https://passport.duitku.com/webapi/api/merchant/v2/inquiry',
-        ]);
-    });
 });
 
 // ============================================================================
