@@ -20,7 +20,7 @@ class DuitkuController extends Controller
     public function __construct()
     {
         // Ambil dari environment variable
-        $this->merchantCode = env('DUITKU_MERCHANT_CODE', 'D19704');
+        $this->merchantCode = env('DUITKU_MERCHANT_CODE', 'D21180');
         $this->apiKey = env('DUITKU_API_KEY');
         $this->sandboxMode = filter_var(env('DUITKU_SANDBOX', true), FILTER_VALIDATE_BOOLEAN);
         
