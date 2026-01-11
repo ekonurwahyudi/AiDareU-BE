@@ -191,8 +191,7 @@ class CheckoutController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal membuat order',
-                'error' => $e->getMessage()
+                'message' => 'Gagal membuat order'
             ], 500);
         }
     }
@@ -227,8 +226,7 @@ class CheckoutController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal mengambil data order',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengambil data order'
             ], 500);
         }
     }
@@ -312,8 +310,7 @@ class CheckoutController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal mengambil data orders',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengambil data orders'
             ], 500);
         }
     }
@@ -360,8 +357,7 @@ class CheckoutController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal mengupdate status order',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengupdate status order'
             ], 500);
         }
     }

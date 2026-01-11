@@ -199,7 +199,7 @@ class AIController extends Controller
             Log::error('Logo generation error:', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => 'Gagal membuat logo. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -374,7 +374,7 @@ class AIController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Download error:', ['filename' => $filename, 'error' => $e->getMessage()]);
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Gagal mengunduh file. Silakan coba lagi.'], 500);
         }
     }
 

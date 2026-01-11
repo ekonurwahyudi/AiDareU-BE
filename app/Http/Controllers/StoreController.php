@@ -49,9 +49,9 @@ class StoreController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Failed to check subdomain availability: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Failed to check subdomain availability',
-                'error' => $e->getMessage()
+                'message' => 'Terjadi kesalahan sistem. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -124,10 +124,10 @@ class StoreController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Failed to fetch store: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch store',
-                'error' => $e->getMessage()
+                'message' => 'Terjadi kesalahan sistem. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -212,9 +212,9 @@ class StoreController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error('Failed to create store: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Failed to create store',
-                'error' => $e->getMessage()
+                'message' => 'Gagal membuat toko. Silakan coba lagi.'
             ], 500);
         }
         
@@ -418,9 +418,9 @@ class StoreController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Failed to get stores: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Failed to get stores',
-                'error' => $e->getMessage()
+                'message' => 'Terjadi kesalahan sistem. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -573,9 +573,9 @@ class StoreController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Failed to update store: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Failed to update store',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengupdate toko. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -605,9 +605,9 @@ class StoreController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Failed to delete store: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Failed to delete store',
-                'error' => $e->getMessage()
+                'message' => 'Gagal menghapus toko. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -818,8 +818,7 @@ class StoreController extends Controller
             Log::error('Store setup error: ' . $e->getMessage());
             Log::error($e->getTraceAsString());
             return response()->json([
-                'message' => 'Failed to setup store',
-                'error' => $e->getMessage()
+                'message' => 'Gagal setup toko. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -841,9 +840,9 @@ class StoreController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Failed to check store status: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Failed to check store status',
-                'error' => $e->getMessage()
+                'message' => 'Terjadi kesalahan sistem. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -879,8 +878,7 @@ class StoreController extends Controller
             Log::error('Error in getByDomain: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch store by domain',
-                'error' => $e->getMessage()
+                'message' => 'Terjadi kesalahan sistem. Silakan coba lagi.'
             ], 500);
         }
     }

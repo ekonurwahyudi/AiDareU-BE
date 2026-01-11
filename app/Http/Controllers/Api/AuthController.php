@@ -81,10 +81,10 @@ class AuthController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+            \Log::error('Registration failed: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Registration failed',
-                'error' => $e->getMessage()
+                'message' => 'Registrasi gagal. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -133,10 +133,10 @@ class AuthController extends Controller
             }
 
         } catch (\Exception $e) {
+            \Log::error('Email verification failed: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Verification failed',
-                'error' => $e->getMessage()
+                'message' => 'Verifikasi email gagal. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -190,10 +190,10 @@ class AuthController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Log::error('Failed to resend verification code: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to send verification code',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengirim ulang kode verifikasi. Silakan coba lagi.'
             ], 500);
         }
     }

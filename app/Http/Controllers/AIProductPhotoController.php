@@ -235,7 +235,7 @@ class AIProductPhotoController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Gagal membuat foto produk. Silakan coba lagi.',
             ], 500);
         }
     }

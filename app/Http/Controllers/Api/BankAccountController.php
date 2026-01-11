@@ -81,10 +81,10 @@ class BankAccountController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to get bank accounts: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to get bank accounts',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengambil data rekening bank. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -183,10 +183,10 @@ class BankAccountController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to get bank accounts: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to get bank accounts',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengambil data rekening bank. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -277,10 +277,10 @@ class BankAccountController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to create bank account: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create bank account',
-                'error' => $e->getMessage()
+                'message' => 'Gagal membuat rekening bank. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -380,10 +380,10 @@ class BankAccountController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to update bank account: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update bank account',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengupdate rekening bank. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -446,10 +446,10 @@ class BankAccountController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to delete bank account: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete bank account',
-                'error' => $e->getMessage()
+                'message' => 'Gagal menghapus rekening bank. Silakan coba lagi.'
             ], 500);
         }
     }

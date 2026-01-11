@@ -85,9 +85,9 @@ class ShippingController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Failed to calculate shipping cost: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Failed to calculate shipping cost',
-                'error' => $e->getMessage()
+                'message' => 'Gagal menghitung ongkos kirim. Silakan coba lagi.'
             ], 500);
         }
     }

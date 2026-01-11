@@ -24,10 +24,10 @@ class CategoryController extends Controller
                 'data' => $categories
             ]);
         } catch (\Exception $e) {
+            Log::error('Failed to retrieve categories: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to retrieve categories',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengambil data kategori. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -49,10 +49,10 @@ class CategoryController extends Controller
                 'data' => $categories
             ]);
         } catch (\Exception $e) {
+            Log::error('Failed to retrieve active categories: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to retrieve active categories',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengambil kategori aktif. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -85,10 +85,10 @@ class CategoryController extends Controller
                 'data' => $category
             ], 201);
         } catch (\Exception $e) {
+            Log::error('Failed to create category: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to create category',
-                'error' => $e->getMessage()
+                'message' => 'Gagal membuat kategori. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -112,8 +112,7 @@ class CategoryController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Category not found',
-                'error' => $e->getMessage()
+                'message' => 'Kategori tidak ditemukan'
             ], 404);
         }
     }
@@ -146,10 +145,10 @@ class CategoryController extends Controller
                 'data' => $category->fresh()
             ]);
         } catch (\Exception $e) {
+            Log::error('Failed to update category: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to update category',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengupdate kategori. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -175,10 +174,10 @@ class CategoryController extends Controller
                 'message' => 'Category deleted successfully'
             ]);
         } catch (\Exception $e) {
+            Log::error('Failed to delete category: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to delete category',
-                'error' => $e->getMessage()
+                'message' => 'Gagal menghapus kategori. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -197,10 +196,10 @@ class CategoryController extends Controller
                 'data' => $category->fresh()
             ]);
         } catch (\Exception $e) {
+            Log::error('Failed to update category status: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to update category status',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengupdate status kategori. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -224,10 +223,10 @@ class CategoryController extends Controller
                 'data' => $categories
             ]);
         } catch (\Exception $e) {
+            Log::error('Search failed: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Search failed',
-                'error' => $e->getMessage()
+                'message' => 'Pencarian gagal. Silakan coba lagi.'
             ], 500);
         }
     }

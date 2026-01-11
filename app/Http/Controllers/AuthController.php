@@ -80,9 +80,9 @@ class AuthController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+            Log::error('Registration failed: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Registration failed',
-                'error' => $e->getMessage()
+                'message' => 'Registrasi gagal. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -152,9 +152,9 @@ class AuthController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Email verification failed: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Email verification failed',
-                'error' => $e->getMessage()
+                'message' => 'Verifikasi email gagal. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -226,9 +226,9 @@ class AuthController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Failed to resend verification code: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Failed to resend verification code',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengirim ulang kode verifikasi. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -333,9 +333,9 @@ class AuthController extends Controller
               ->cookie('user_data', json_encode($userData), 60 * 24 * 7); // 7 days
 
         } catch (\Exception $e) {
+            Log::error('Login failed: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Login failed',
-                'error' => $e->getMessage()
+                'message' => 'Login gagal. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -353,9 +353,9 @@ class AuthController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Logout failed: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Logout failed',
-                'error' => $e->getMessage()
+                'message' => 'Logout gagal. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -423,9 +423,9 @@ class AuthController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Forgot password error: ' . $e->getMessage());
+            Log::error('Failed to process password reset request: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Failed to process password reset request',
-                'error' => $e->getMessage()
+                'message' => 'Gagal memproses permintaan reset password. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -494,9 +494,9 @@ class AuthController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Reset password error: ' . $e->getMessage());
+            Log::error('Password reset failed: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Password reset failed',
-                'error' => $e->getMessage()
+                'message' => 'Reset password gagal. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -544,9 +544,9 @@ class AuthController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            Log::error('Failed to get user data: ' . $e->getMessage());
             return response()->json([
-                'message' => 'Failed to get user data',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengambil data user. Silakan coba lagi.'
             ], 500);
         }
     }

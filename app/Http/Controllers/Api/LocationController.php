@@ -108,10 +108,10 @@ class LocationController extends Controller
             ]);
             
         } catch (\Exception $e) {
+            \Log::error('Failed to fetch cities data: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error fetching cities data',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengambil data kota. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -179,10 +179,10 @@ class LocationController extends Controller
             ]);
             
         } catch (\Exception $e) {
+            \Log::error('Failed to fetch provinces data: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error fetching provinces data',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengambil data provinsi. Silakan coba lagi.'
             ], 500);
         }
     }

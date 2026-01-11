@@ -241,7 +241,7 @@ class AIFashionPhotoController extends Controller
             Log::error('Fashion photo error:', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Gagal membuat foto fashion. Silakan coba lagi.',
             ], 500);
         }
     }
@@ -396,7 +396,7 @@ class AIFashionPhotoController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Download error:', ['filename' => $filename, 'error' => $e->getMessage()]);
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Gagal mengunduh file. Silakan coba lagi.'], 500);
         }
     }
 

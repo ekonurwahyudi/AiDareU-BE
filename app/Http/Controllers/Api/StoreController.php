@@ -77,10 +77,10 @@ class StoreController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to create store: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create store',
-                'error' => $e->getMessage()
+                'message' => 'Gagal membuat toko. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -293,10 +293,10 @@ class StoreController extends Controller
                 'message' => 'Store not found'
             ], 404);
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to update store: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update store',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengupdate toko. Silakan coba lagi.'
             ], 500);
         }
     }

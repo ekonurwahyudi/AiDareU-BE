@@ -112,10 +112,10 @@ class RBACController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to create user: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create user',
-                'error' => $e->getMessage()
+                'message' => 'Gagal membuat user. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -173,10 +173,10 @@ class RBACController extends Controller
                 'message' => 'User not found'
             ], 404);
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to update user: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update user',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengupdate user. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -280,10 +280,10 @@ class RBACController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to assign roles: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to assign roles',
-                'error' => $e->getMessage()
+                'message' => 'Gagal menetapkan role. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -304,8 +304,7 @@ class RBACController extends Controller
             \Log::error('Error in getRoles: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch roles',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengambil data role. Silakan coba lagi.'
             ], 500);
         }
     }

@@ -45,10 +45,10 @@ class EditorImageController extends Controller
             return $response;
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to upload image: ' . $e->getMessage());
             $response = response()->json([
                 'success' => false,
-                'message' => 'Failed to upload image',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengupload gambar. Silakan coba lagi.'
             ], 500);
 
             // Add CORS headers to error response too

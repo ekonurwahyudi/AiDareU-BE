@@ -72,9 +72,10 @@ class CustomerController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to get customers: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => $e->getMessage()
+                'message' => 'Gagal mengambil data pelanggan. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -100,9 +101,10 @@ class CustomerController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to get customer: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => $e->getMessage()
+                'message' => 'Gagal mengambil data pelanggan. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -141,9 +143,10 @@ class CustomerController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to create customer: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => $e->getMessage()
+                'message' => 'Gagal membuat data pelanggan. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -190,9 +193,10 @@ class CustomerController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to update customer: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => $e->getMessage()
+                'message' => 'Gagal mengupdate data pelanggan. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -220,9 +224,10 @@ class CustomerController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to delete customer: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => $e->getMessage()
+                'message' => 'Gagal menghapus data pelanggan. Silakan coba lagi.'
             ], 500);
         }
     }

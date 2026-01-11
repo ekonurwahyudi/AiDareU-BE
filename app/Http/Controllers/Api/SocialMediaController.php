@@ -116,10 +116,10 @@ class SocialMediaController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to get social media accounts: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to get social media accounts',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengambil data sosial media. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -214,10 +214,10 @@ class SocialMediaController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to save social media account: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to save social media account',
-                'error' => $e->getMessage()
+                'message' => 'Gagal menyimpan akun sosial media. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -314,10 +314,10 @@ class SocialMediaController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to update social media account: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update social media account',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengupdate akun sosial media. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -403,10 +403,10 @@ class SocialMediaController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to delete social media account: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete social media account',
-                'error' => $e->getMessage()
+                'message' => 'Gagal menghapus akun sosial media. Silakan coba lagi.'
             ], 500);
         }
     }

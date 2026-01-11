@@ -66,10 +66,10 @@ class PixelStoreController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to fetch pixel stores: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch pixel stores',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengambil data pixel. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -149,10 +149,10 @@ class PixelStoreController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to create pixel store: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create pixel store',
-                'error' => $e->getMessage()
+                'message' => 'Gagal membuat pixel. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -236,10 +236,10 @@ class PixelStoreController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to update pixel store: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update pixel store',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengupdate pixel. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -302,10 +302,10 @@ class PixelStoreController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to delete pixel store: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete pixel store',
-                'error' => $e->getMessage()
+                'message' => 'Gagal menghapus pixel. Silakan coba lagi.'
             ], 500);
         }
     }

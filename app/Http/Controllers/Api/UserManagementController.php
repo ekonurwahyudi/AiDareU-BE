@@ -65,9 +65,10 @@ class UserManagementController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to get users: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => $e->getMessage()
+                'message' => 'Gagal mengambil data pengguna. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -96,9 +97,10 @@ class UserManagementController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to get user: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => $e->getMessage()
+                'message' => 'Gagal mengambil data pengguna. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -154,9 +156,10 @@ class UserManagementController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to create user: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => $e->getMessage()
+                'message' => 'Gagal membuat pengguna. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -224,9 +227,10 @@ class UserManagementController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to update user: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => $e->getMessage()
+                'message' => 'Gagal mengupdate pengguna. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -254,9 +258,10 @@ class UserManagementController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to delete user: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => $e->getMessage()
+                'message' => 'Gagal menghapus pengguna. Silakan coba lagi.'
             ], 500);
         }
     }

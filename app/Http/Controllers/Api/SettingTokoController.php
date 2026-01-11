@@ -134,10 +134,10 @@ class SettingTokoController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
+            \Log::error('Error fetching store data: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error fetching store data',
-                'error' => $e->getMessage()
+                'message' => 'Terjadi kesalahan saat mengambil data toko. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -180,10 +180,10 @@ class SettingTokoController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
+            \Log::error('Error fetching theme settings: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error fetching theme settings',
-                'error' => $e->getMessage()
+                'message' => 'Terjadi kesalahan saat mengambil pengaturan tema. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -300,10 +300,10 @@ class SettingTokoController extends Controller
                 'data' => $settings
             ]);
         } catch (\Exception $e) {
+            \Log::error('Error updating general settings: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error updating general settings',
-                'error' => $e->getMessage()
+                'message' => 'Terjadi kesalahan saat mengupdate pengaturan umum. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -424,8 +424,7 @@ class SettingTokoController extends Controller
             ]);
             return response()->json([
                 'success' => false,
-                'message' => 'Error updating slides',
-                'error' => $e->getMessage()
+                'message' => 'Terjadi kesalahan saat mengupdate slide. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -457,10 +456,10 @@ class SettingTokoController extends Controller
                 'data' => $faq
             ]);
         } catch (\Exception $e) {
+            \Log::error('Error creating FAQ: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error creating FAQ',
-                'error' => $e->getMessage()
+                'message' => 'Terjadi kesalahan saat membuat FAQ. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -498,10 +497,10 @@ class SettingTokoController extends Controller
                 'data' => $faq
             ]);
         } catch (\Exception $e) {
+            \Log::error('Error updating FAQ: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error updating FAQ',
-                'error' => $e->getMessage()
+                'message' => 'Terjadi kesalahan saat mengupdate FAQ. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -524,10 +523,10 @@ class SettingTokoController extends Controller
                 'message' => 'FAQ deleted successfully'
             ]);
         } catch (\Exception $e) {
+            \Log::error('Error deleting FAQ: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error deleting FAQ',
-                'error' => $e->getMessage()
+                'message' => 'Terjadi kesalahan saat menghapus FAQ. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -561,10 +560,10 @@ class SettingTokoController extends Controller
                 'data' => $testimonial
             ]);
         } catch (\Exception $e) {
+            \Log::error('Error creating testimonial: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error creating testimonial',
-                'error' => $e->getMessage()
+                'message' => 'Terjadi kesalahan saat membuat testimoni. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -604,10 +603,10 @@ class SettingTokoController extends Controller
                 'data' => $testimonial
             ]);
         } catch (\Exception $e) {
+            \Log::error('Error updating testimonial: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error updating testimonial',
-                'error' => $e->getMessage()
+                'message' => 'Terjadi kesalahan saat mengupdate testimoni. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -630,10 +629,10 @@ class SettingTokoController extends Controller
                 'message' => 'Testimonial deleted successfully'
             ]);
         } catch (\Exception $e) {
+            \Log::error('Error deleting testimonial: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error deleting testimonial',
-                'error' => $e->getMessage()
+                'message' => 'Terjadi kesalahan saat menghapus testimoni. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -704,10 +703,10 @@ class SettingTokoController extends Controller
                 'data' => $seo
             ]);
         } catch (\Exception $e) {
+            \Log::error('Error updating SEO settings: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Error updating SEO settings',
-                'error' => $e->getMessage()
+                'message' => 'Terjadi kesalahan saat mengupdate pengaturan SEO. Silakan coba lagi.'
             ], 500);
         }
     }

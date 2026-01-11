@@ -1689,7 +1689,7 @@ HTML;
 
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
+                'message' => 'Gagal membuat landing page. Silakan coba lagi.'
             ], 500);
         }
     }

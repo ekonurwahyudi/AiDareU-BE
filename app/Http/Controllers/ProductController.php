@@ -110,10 +110,10 @@ class ProductController extends Controller
                 'data' => $products
             ]);
         } catch (\Exception $e) {
+            Log::error('Failed to retrieve products: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to retrieve products',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengambil data produk. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -311,8 +311,7 @@ class ProductController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Gagal membuat produk. Silakan coba lagi.',
-                'error' => $e->getMessage()
+                'message' => 'Gagal membuat produk. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -333,8 +332,7 @@ class ProductController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Product not found',
-                'error' => $e->getMessage()
+                'message' => 'Produk tidak ditemukan'
             ], 404);
         }
     }
@@ -570,10 +568,10 @@ class ProductController extends Controller
                 'data' => $product->fresh()
             ]);
         } catch (\Exception $e) {
+            Log::error('Failed to update product: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to update product',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengupdate produk. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -598,10 +596,10 @@ class ProductController extends Controller
                 'message' => 'Product deleted successfully'
             ]);
         } catch (\Exception $e) {
+            Log::error('Failed to delete product: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to delete product',
-                'error' => $e->getMessage()
+                'message' => 'Gagal menghapus produk. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -632,10 +630,10 @@ class ProductController extends Controller
                 'data' => $product->fresh()
             ]);
         } catch (\Exception $e) {
+            Log::error('Failed to update product status: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to update product status',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengupdate status produk. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -673,10 +671,10 @@ class ProductController extends Controller
                 'data' => $product->fresh()
             ]);
         } catch (\Exception $e) {
+            Log::error('Failed to update product stock: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to update product stock',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengupdate stok produk. Silakan coba lagi.'
             ], 500);
         }
     }
@@ -699,10 +697,10 @@ class ProductController extends Controller
                 'data' => $products
             ]);
         } catch (\Exception $e) {
+            Log::error('Failed to retrieve store products: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => 'Failed to retrieve store products',
-                'error' => $e->getMessage()
+                'message' => 'Gagal mengambil produk toko. Silakan coba lagi.'
             ], 500);
         }
     }

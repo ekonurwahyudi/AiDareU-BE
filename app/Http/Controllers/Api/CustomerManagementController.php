@@ -40,9 +40,10 @@ class CustomerManagementController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Failed to get customers: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
-                'message' => $e->getMessage()
+                'message' => 'Gagal mengambil data pelanggan. Silakan coba lagi.'
             ], 500);
         }
     }
