@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\CoinTransaction;
 use App\Models\DuitkuTransaction;
+use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -150,9 +151,9 @@ class DuitkuController extends Controller
     private function sendPaymentReminderEmail($user, $transaction, $paymentAmount, $coinAmount)
     {
         try {
-            $frontendUrl = env('APP_FRONTEND_URL', 'https://aidareu.com');
+            $paymentUrl = $transaction->payment_url;
             
-            Mail::send([], [], function ($message) use ($user, $transaction, $paymentAmount, $coinAmount, $frontendUrl) {
+            Mail::send([], [], function ($message) use ($user, $transaction, $paymentAmount, $coinAmount, $paymentUrl) {
                 $message->to($user->email, $user->name)
                     ->subject('🔔 Segera Selesaikan Pembayaran Top Up Coin - AiDareU')
                     ->html("
@@ -196,8 +197,8 @@ class DuitkuController extends Controller
                             </p>
                             
                             <div style='text-align: center; margin: 30px 0;'>
-                                <a href='{$frontendUrl}/apps/user/coin' style='background: #f59e0b; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;'>
-                                    Lihat Riwayat Coin
+                                <a href='{$paymentUrl}' style='background: #f59e0b; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;'>
+                                    💳 Bayar Sekarang
                                 </a>
                             </div>
                             
@@ -214,6 +215,116 @@ class DuitkuController extends Controller
             Log::info('Payment reminder email sent', ['user_id' => $user->id, 'order_id' => $transaction->merchant_order_id]);
         } catch (\Exception $e) {
             Log::error('Failed to send payment reminder email', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Create notification for successful payment
+     */
+    private function createPaymentSuccessNotification($user, $transaction)
+    {
+        try {
+            Notification::create([
+                'user_uuid' => $user->uuid,
+                'type' => 'payment',
+                'title' => '✅ Top Up Berhasil!',
+                'description' => "Selamat! Top up {$transaction->coin_amount} Coin berhasil. Saldo coin Anda telah bertambah.",
+                'data' => [
+                    'transaction_id' => $transaction->id,
+                    'merchant_order_id' => $transaction->merchant_order_id,
+                    'coin_amount' => $transaction->coin_amount,
+                    'payment_amount' => $transaction->payment_amount,
+                ],
+                'icon' => 'tabler-coin',
+                'color' => 'success',
+                'action_url' => '/apps/user/coin',
+                'is_read' => false,
+            ]);
+
+            Log::info('Payment success notification created', ['user_id' => $user->id]);
+        } catch (\Exception $e) {
+            Log::error('Failed to create payment notification', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Send payment success email
+     */
+    private function sendPaymentSuccessEmail($user, $transaction)
+    {
+        try {
+            $frontendUrl = env('APP_FRONTEND_URL', 'https://aidareu.com');
+            $coinAmount = $transaction->coin_amount;
+            $paymentAmount = $transaction->payment_amount;
+            
+            Mail::send([], [], function ($message) use ($user, $transaction, $coinAmount, $paymentAmount, $frontendUrl) {
+                $message->to($user->email, $user->name)
+                    ->subject('✅ Pembayaran Berhasil - Top Up ' . $coinAmount . ' Coin AiDareU')
+                    ->html("
+                        <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;'>
+                            <div style='text-align: center; margin-bottom: 30px;'>
+                                <h1 style='color: #f59e0b; margin: 0;'>AiDareU</h1>
+                            </div>
+                            
+                            <div style='text-align: center; margin-bottom: 20px;'>
+                                <div style='background: #10B981; width: 80px; height: 80px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;'>
+                                    <span style='font-size: 40px; color: white;'>✓</span>
+                                </div>
+                            </div>
+                            
+                            <h2 style='color: #10B981; text-align: center;'>Pembayaran Berhasil! 🎉</h2>
+                            
+                            <p style='color: #666; font-size: 16px; text-align: center;'>
+                                Halo {$user->name}, terima kasih atas pembayaran Anda!
+                            </p>
+                            
+                            <div style='background: #ECFDF5; border: 1px solid #10B981; border-radius: 8px; padding: 20px; margin: 20px 0;'>
+                                <h3 style='color: #059669; margin-top: 0;'>📋 Detail Transaksi</h3>
+                                <table style='width: 100%; border-collapse: collapse;'>
+                                    <tr>
+                                        <td style='padding: 8px 0; color: #666;'>Order ID</td>
+                                        <td style='padding: 8px 0; text-align: right; font-weight: bold;'>{$transaction->merchant_order_id}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style='padding: 8px 0; color: #666;'>Jumlah Coin</td>
+                                        <td style='padding: 8px 0; text-align: right; font-weight: bold; color: #f59e0b; font-size: 20px;'>+{$coinAmount} Pts</td>
+                                    </tr>
+                                    <tr>
+                                        <td style='padding: 8px 0; color: #666;'>Total Pembayaran</td>
+                                        <td style='padding: 8px 0; text-align: right; font-weight: bold;'>Rp " . number_format($paymentAmount, 0, ',', '.') . "</td>
+                                    </tr>
+                                    <tr>
+                                        <td style='padding: 8px 0; color: #666;'>Status</td>
+                                        <td style='padding: 8px 0; text-align: right;'>
+                                            <span style='background: #10B981; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px;'>BERHASIL</span>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                            
+                            <p style='color: #666; font-size: 14px; text-align: center;'>
+                                Coin Anda telah ditambahkan dan siap digunakan untuk fitur AI di AiDareU.
+                            </p>
+                            
+                            <div style='text-align: center; margin: 30px 0;'>
+                                <a href='{$frontendUrl}/apps/user/coin' style='background: #f59e0b; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;'>
+                                    Lihat Saldo Coin
+                                </a>
+                            </div>
+                            
+                            <hr style='border: none; border-top: 1px solid #eee; margin: 30px 0;'>
+                            
+                            <p style='color: #999; font-size: 12px; text-align: center;'>
+                                Terima kasih telah menggunakan AiDareU!<br>
+                                Email ini dikirim otomatis oleh sistem.
+                            </p>
+                        </div>
+                    ");
+            });
+
+            Log::info('Payment success email sent', ['user_id' => $user->id, 'order_id' => $transaction->merchant_order_id]);
+        } catch (\Exception $e) {
+            Log::error('Failed to send payment success email', ['error' => $e->getMessage()]);
         }
     }
 
@@ -326,6 +437,12 @@ class DuitkuController extends Controller
                         'status' => 'berhasil',
                     ]);
 
+                    // Create success notification
+                    $this->createPaymentSuccessNotification($user, $transaction);
+
+                    // Send success email
+                    $this->sendPaymentSuccessEmail($user, $transaction);
+
                     Log::info('Coins added to user', [
                         'user_id' => $user->id,
                         'coin_amount' => $transaction->coin_amount
@@ -408,6 +525,12 @@ class DuitkuController extends Controller
                                 'coin_keluar' => 0,
                                 'status' => 'berhasil',
                             ]);
+
+                            // Create success notification
+                            $this->createPaymentSuccessNotification($user, $transaction);
+
+                            // Send success email
+                            $this->sendPaymentSuccessEmail($user, $transaction);
                         }
                     }
                 } elseif ($apiStatus === '02' && $transaction->status !== 'canceled') {
