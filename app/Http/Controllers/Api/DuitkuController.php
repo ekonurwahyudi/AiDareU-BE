@@ -9,15 +9,33 @@ use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 class DuitkuController extends Controller
 {
     private $merchantCode;
     private $apiKey;
     private $sandboxMode;
+
+    /**
+     * Duitku IP Whitelist (Production & Sandbox)
+     * Source: https://docs.duitku.com/api/id/#callback
+     */
+    private $duitkuIpWhitelist = [
+        // Production IPs
+        '103.10.128.11',
+        '103.10.128.14',
+        // Sandbox IPs
+        '103.10.129.11',
+        '103.10.129.14',
+        // Localhost for testing
+        '127.0.0.1',
+    ];
 
     public function __construct()
     {
@@ -27,15 +45,66 @@ class DuitkuController extends Controller
     }
 
     /**
+     * Validate if request IP is from Duitku
+     */
+    private function isValidDuitkuIp(Request $request): bool
+    {
+        $clientIp = $request->ip();
+        
+        // In sandbox mode, allow more IPs for testing
+        if ($this->sandboxMode) {
+            return true; // Allow all IPs in sandbox for easier testing
+        }
+
+        // Check against whitelist
+        if (in_array($clientIp, $this->duitkuIpWhitelist)) {
+            return true;
+        }
+
+        // Check X-Forwarded-For header (for load balancers)
+        $forwardedFor = $request->header('X-Forwarded-For');
+        if ($forwardedFor) {
+            $ips = array_map('trim', explode(',', $forwardedFor));
+            foreach ($ips as $ip) {
+                if (in_array($ip, $this->duitkuIpWhitelist)) {
+                    return true;
+                }
+            }
+        }
+
+        Log::warning('Duitku callback from unauthorized IP', [
+            'client_ip' => $clientIp,
+            'forwarded_for' => $forwardedFor,
+        ]);
+
+        return false;
+    }
+
+    /**
+     * Generate secure merchant order ID
+     */
+    private function generateSecureMerchantOrderId(): string
+    {
+        // Format: AIDUTP + timestamp + random secure string
+        return 'AIDUTP' . time() . Str::random(8);
+    }
+
+    /**
      * Create Duitku payment transaction
      * POST /api/payment/duitku/create
+     * 
+     * SECURITY:
+     * - Requires authentication
+     * - Rate limited (10/min per user)
+     * - Idempotency check to prevent duplicate transactions
      */
     public function createPayment(Request $request)
     {
         try {
             $request->validate([
-                'coin_amount' => 'required|integer|min:1',
+                'coin_amount' => 'required|integer|min:1|max:10000', // Max 10,000 coins per transaction
                 'payment_method' => 'nullable|string|max:2',
+                'idempotency_key' => 'nullable|string|max:64', // Optional idempotency key
             ]);
 
             /** @var \App\Models\User|null $user */
@@ -47,10 +116,43 @@ class DuitkuController extends Controller
                 ], 401);
             }
 
+            // Idempotency check - prevent duplicate transactions
+            $idempotencyKey = $request->idempotency_key;
+            if ($idempotencyKey) {
+                $cacheKey = "payment_idempotency:{$user->id}:{$idempotencyKey}";
+                $existingTransaction = Cache::get($cacheKey);
+                
+                if ($existingTransaction) {
+                    Log::info('Duplicate payment request blocked', [
+                        'user_id' => $user->id,
+                        'idempotency_key' => $idempotencyKey,
+                    ]);
+                    
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Payment already created',
+                        'data' => $existingTransaction,
+                    ]);
+                }
+            }
+
+            // Check for pending transactions (prevent spam)
+            $pendingCount = DuitkuTransaction::where('user_id', $user->id)
+                ->where('status', 'pending')
+                ->where('created_at', '>', now()->subHour())
+                ->count();
+
+            if ($pendingCount >= 5) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Anda memiliki terlalu banyak transaksi pending. Silakan selesaikan atau tunggu transaksi sebelumnya.'
+                ], 429);
+            }
+
             $coinAmount = $request->coin_amount;
             $paymentAmount = $coinAmount * 1000;
             $paymentMethod = $request->payment_method ?? 'SP';
-            $merchantOrderId = 'AIDUTP' . time() . rand(100, 999);
+            $merchantOrderId = $this->generateSecureMerchantOrderId();
             $signature = md5($this->merchantCode . $merchantOrderId . $paymentAmount . $this->apiKey);
 
             $requestData = [
@@ -121,19 +223,26 @@ class DuitkuController extends Controller
             // Send payment reminder email
             $this->sendPaymentReminderEmail($user, $transaction, $paymentAmount, $coinAmount);
 
+            $responseData = [
+                'transaction_id' => $transaction->id,
+                'merchant_order_id' => $merchantOrderId,
+                'reference' => $result['reference'] ?? null,
+                'payment_url' => $result['paymentUrl'] ?? null,
+                'va_number' => $result['vaNumber'] ?? null,
+                'qr_string' => $result['qrString'] ?? null,
+                'amount' => $paymentAmount,
+                'coin_amount' => $coinAmount,
+            ];
+
+            // Store idempotency key for 1 hour
+            if ($idempotencyKey) {
+                Cache::put($cacheKey, $responseData, now()->addHour());
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Payment created successfully',
-                'data' => [
-                    'transaction_id' => $transaction->id,
-                    'merchant_order_id' => $merchantOrderId,
-                    'reference' => $result['reference'] ?? null,
-                    'payment_url' => $result['paymentUrl'] ?? null,
-                    'va_number' => $result['vaNumber'] ?? null,
-                    'qr_string' => $result['qrString'] ?? null,
-                    'amount' => $paymentAmount,
-                    'coin_amount' => $coinAmount,
-                ]
+                'data' => $responseData
             ]);
 
         } catch (\Exception $e) {
@@ -334,12 +443,32 @@ class DuitkuController extends Controller
      * POST /api/payment/duitku/callback
      * Dokumentasi: https://docs.duitku.com/api/id/#callback
      * 
+     * SECURITY:
+     * - IP whitelist validation (production only)
+     * - Signature validation
+     * - Database transaction with locking to prevent race conditions
+     * 
      * Content-Type: x-www-form-urlencoded
      */
     public function handleCallback(Request $request)
     {
         try {
-            Log::info('Duitku callback received', $request->all());
+            Log::info('Duitku callback received', [
+                'data' => $request->all(),
+                'ip' => $request->ip(),
+            ]);
+
+            // SECURITY: Validate IP is from Duitku
+            if (!$this->isValidDuitkuIp($request)) {
+                Log::error('Duitku callback: Unauthorized IP', [
+                    'ip' => $request->ip(),
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 403);
+            }
 
             // Get callback parameters (x-www-form-urlencoded)
             $merchantCode = $request->input('merchantCode');
@@ -387,67 +516,103 @@ class DuitkuController extends Controller
                 ], 400);
             }
 
-            // Find transaction
-            $transaction = DuitkuTransaction::where('merchant_order_id', $merchantOrderId)->first();
+            // Use database transaction with pessimistic locking to prevent race conditions
+            $result = DB::transaction(function () use ($merchantOrderId, $resultCode, $paymentCode, $reference, $settlementDate, $publisherOrderId, $issuerCode, $amount) {
+                // Lock the transaction row for update
+                $transaction = DuitkuTransaction::where('merchant_order_id', $merchantOrderId)
+                    ->lockForUpdate()
+                    ->first();
 
-            if (!$transaction) {
-                Log::error('Duitku callback: Transaction not found', [
-                    'merchant_order_id' => $merchantOrderId
+                if (!$transaction) {
+                    Log::error('Duitku callback: Transaction not found', [
+                        'merchant_order_id' => $merchantOrderId
+                    ]);
+                    return ['error' => 'Transaction not found', 'code' => 404];
+                }
+
+                // Validate amount matches
+                if ((int)$amount !== (int)$transaction->payment_amount) {
+                    Log::error('Duitku callback: Amount mismatch', [
+                        'expected' => $transaction->payment_amount,
+                        'received' => $amount,
+                    ]);
+                    return ['error' => 'Amount mismatch', 'code' => 400];
+                }
+
+                // Check if already processed
+                $oldStatus = $transaction->status;
+                if ($oldStatus === 'success') {
+                    Log::info('Duitku callback: Transaction already processed', [
+                        'merchant_order_id' => $merchantOrderId
+                    ]);
+                    return ['success' => true, 'already_processed' => true];
+                }
+
+                // Update transaction status
+                $newStatus = $resultCode === '00' ? 'success' : 'failed';
+
+                $transaction->update([
+                    'status' => $newStatus,
+                    'result_code' => $resultCode,
+                    'payment_code' => $paymentCode,
+                    'callback_reference' => $reference,
+                    'settlement_date' => $settlementDate,
+                    'publisher_order_id' => $publisherOrderId,
+                    'issuer_code' => $issuerCode,
                 ]);
 
+                Log::info('Duitku transaction updated', [
+                    'transaction_id' => $transaction->id,
+                    'old_status' => $oldStatus,
+                    'new_status' => $newStatus,
+                    'result_code' => $resultCode
+                ]);
+
+                // If payment successful, add coins to user
+                if ($resultCode === '00') {
+                    $user = User::find($transaction->user_id);
+
+                    if ($user) {
+                        // Double-check no existing coin transaction (idempotency)
+                        $existingCoin = CoinTransaction::where('keterangan', 'LIKE', "%{$merchantOrderId}%")->first();
+                        
+                        if (!$existingCoin) {
+                            // Create coin transaction
+                            CoinTransaction::create([
+                                'uuid_user' => $user->uuid,
+                                'keterangan' => "Top Up via Duitku - {$transaction->merchant_order_id}",
+                                'coin_masuk' => $transaction->coin_amount,
+                                'coin_keluar' => 0,
+                                'status' => 'berhasil',
+                            ]);
+
+                            // Create success notification
+                            $this->createPaymentSuccessNotification($user, $transaction);
+
+                            // Send success email
+                            $this->sendPaymentSuccessEmail($user, $transaction);
+
+                            Log::info('Coins added to user', [
+                                'user_id' => $user->id,
+                                'coin_amount' => $transaction->coin_amount
+                            ]);
+                        } else {
+                            Log::warning('Coin transaction already exists', [
+                                'merchant_order_id' => $merchantOrderId
+                            ]);
+                        }
+                    }
+                }
+
+                return ['success' => true];
+            });
+
+            // Handle transaction result
+            if (isset($result['error'])) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Transaction not found'
-                ], 404);
-            }
-
-            // Update transaction status
-            // resultCode: 00 = Success, 01 = Failed
-            $oldStatus = $transaction->status;
-            $newStatus = $resultCode === '00' ? 'success' : 'failed';
-
-            $transaction->update([
-                'status' => $newStatus,
-                'result_code' => $resultCode,
-                'payment_code' => $paymentCode,
-                'callback_reference' => $reference,
-                'settlement_date' => $settlementDate,
-                'publisher_order_id' => $publisherOrderId,
-                'issuer_code' => $issuerCode,
-            ]);
-
-            Log::info('Duitku transaction updated', [
-                'transaction_id' => $transaction->id,
-                'old_status' => $oldStatus,
-                'new_status' => $newStatus,
-                'result_code' => $resultCode
-            ]);
-
-            // If payment successful and not already processed, add coins to user
-            if ($resultCode === '00' && $oldStatus !== 'success') {
-                $user = User::find($transaction->user_id);
-
-                if ($user) {
-                    // Create coin transaction
-                    CoinTransaction::create([
-                        'uuid_user' => $user->uuid,
-                        'keterangan' => "Top Up via Duitku - {$transaction->merchant_order_id}",
-                        'coin_masuk' => $transaction->coin_amount,
-                        'coin_keluar' => 0,
-                        'status' => 'berhasil',
-                    ]);
-
-                    // Create success notification
-                    $this->createPaymentSuccessNotification($user, $transaction);
-
-                    // Send success email
-                    $this->sendPaymentSuccessEmail($user, $transaction);
-
-                    Log::info('Coins added to user', [
-                        'user_id' => $user->id,
-                        'coin_amount' => $transaction->coin_amount
-                    ]);
-                }
+                    'message' => $result['error']
+                ], $result['code']);
             }
 
             // Return success response to Duitku
@@ -474,12 +639,28 @@ class DuitkuController extends Controller
      * Check transaction status
      * GET /api/payment/duitku/status/{merchantOrderId}
      * Dokumentasi: https://docs.duitku.com/api/id/#cek-transaksi
+     * 
+     * SECURITY:
+     * - Requires authentication
+     * - User can only check their own transactions
+     * - Database transaction with locking for coin addition
      */
     public function checkStatus($merchantOrderId)
     {
         try {
-            // First check local database
-            $transaction = DuitkuTransaction::where('merchant_order_id', $merchantOrderId)->first();
+            /** @var \App\Models\User|null $user */
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized'
+                ], 401);
+            }
+
+            // First check local database - SECURITY: Only allow user to check their own transactions
+            $transaction = DuitkuTransaction::where('merchant_order_id', $merchantOrderId)
+                ->where('user_id', $user->id) // CRITICAL: Ownership validation
+                ->first();
 
             if (!$transaction) {
                 return response()->json([
@@ -488,7 +669,24 @@ class DuitkuController extends Controller
                 ], 404);
             }
 
-            // Optionally check status from Duitku API
+            // If already success, return immediately without API call
+            if ($transaction->status === 'success') {
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'merchant_order_id' => $transaction->merchant_order_id,
+                        'reference' => $transaction->reference,
+                        'status' => $transaction->status,
+                        'api_status_code' => '00',
+                        'coin_amount' => $transaction->coin_amount,
+                        'payment_amount' => $transaction->payment_amount,
+                        'payment_url' => $transaction->payment_url,
+                        'created_at' => $transaction->created_at->toDateTimeString(),
+                    ]
+                ]);
+            }
+
+            // Check status from Duitku API
             $signature = md5($this->merchantCode . $merchantOrderId . $this->apiKey);
 
             $endpoint = $this->sandboxMode
@@ -508,31 +706,42 @@ class DuitkuController extends Controller
                 $result = $response->json();
                 $apiStatus = $result['statusCode'] ?? null;
                 
-                // Update local status if different
+                // Update local status if different - use transaction with locking
                 // statusCode: 00 = Success, 01 = Pending, 02 = Canceled
                 if ($apiStatus === '00' && $transaction->status !== 'success') {
-                    $transaction->update(['status' => 'success']);
-                    
-                    // Add coins if not already added
-                    $user = User::find($transaction->user_id);
-                    if ($user) {
+                    DB::transaction(function () use ($transaction, $merchantOrderId, $user) {
+                        // Re-fetch with lock
+                        $lockedTransaction = DuitkuTransaction::where('id', $transaction->id)
+                            ->lockForUpdate()
+                            ->first();
+
+                        if ($lockedTransaction->status === 'success') {
+                            return; // Already processed
+                        }
+
+                        $lockedTransaction->update(['status' => 'success']);
+                        
+                        // Add coins if not already added
                         $existingCoin = CoinTransaction::where('keterangan', 'LIKE', "%{$merchantOrderId}%")->first();
                         if (!$existingCoin) {
                             CoinTransaction::create([
                                 'uuid_user' => $user->uuid,
                                 'keterangan' => "Top Up via Duitku - {$merchantOrderId}",
-                                'coin_masuk' => $transaction->coin_amount,
+                                'coin_masuk' => $lockedTransaction->coin_amount,
                                 'coin_keluar' => 0,
                                 'status' => 'berhasil',
                             ]);
 
                             // Create success notification
-                            $this->createPaymentSuccessNotification($user, $transaction);
+                            $this->createPaymentSuccessNotification($user, $lockedTransaction);
 
                             // Send success email
-                            $this->sendPaymentSuccessEmail($user, $transaction);
+                            $this->sendPaymentSuccessEmail($user, $lockedTransaction);
                         }
-                    }
+                    });
+
+                    // Refresh transaction
+                    $transaction->refresh();
                 } elseif ($apiStatus === '02' && $transaction->status !== 'canceled') {
                     $transaction->update(['status' => 'canceled']);
                 }
