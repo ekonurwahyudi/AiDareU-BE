@@ -3,12 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Models\ProductDigital;
+use App\Services\ImageOptimizationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 
 class ProductDigitalController extends Controller
 {
+    protected ImageOptimizationService $imageService;
+    
+    public function __construct(ImageOptimizationService $imageService)
+    {
+        $this->imageService = $imageService;
+    }
+    
     /**
      * Display a listing of the resource.
      */
@@ -74,11 +82,14 @@ class ProductDigitalController extends Controller
 
         $data = $request->except('gambar');
 
-        // Handle image upload
+        // Handle image upload - convert to WebP for optimization
         if ($request->hasFile('gambar')) {
-            $image = $request->file('gambar');
-            $path = $image->store('products-digital', 'public');
-            $data['gambar'] = $path;
+            $data['gambar'] = $this->imageService->convertToWebP(
+                $request->file('gambar'),
+                'products-digital',
+                80,
+                1200
+            );
         }
 
         $product = ProductDigital::create($data);
@@ -153,16 +164,19 @@ class ProductDigitalController extends Controller
 
         $data = $request->except('gambar');
 
-        // Handle image upload
+        // Handle image upload - convert to WebP for optimization
         if ($request->hasFile('gambar')) {
             // Delete old image
             if ($product->gambar && Storage::disk('public')->exists($product->gambar)) {
                 Storage::disk('public')->delete($product->gambar);
             }
 
-            $image = $request->file('gambar');
-            $path = $image->store('products-digital', 'public');
-            $data['gambar'] = $path;
+            $data['gambar'] = $this->imageService->convertToWebP(
+                $request->file('gambar'),
+                'products-digital',
+                80,
+                1200
+            );
         }
 
         $product->update($data);

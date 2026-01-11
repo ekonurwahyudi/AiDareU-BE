@@ -9,12 +9,20 @@ use App\Models\FaqToko;
 use App\Models\TestimoniToko;
 use App\Models\SeoToko;
 use App\Models\Store;
+use App\Services\ImageOptimizationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 
 class SettingTokoController extends Controller
 {
+    protected ImageOptimizationService $imageService;
+    
+    public function __construct(ImageOptimizationService $imageService)
+    {
+        $this->imageService = $imageService;
+    }
+    
     // Get store data by subdomain with all theme settings and products
     public function getStoreBySubdomain($subdomain)
     {
@@ -234,7 +242,12 @@ class SettingTokoController extends Controller
                 }
 
                 $logo = $request->file('logo');
-                $logoPath = $logo->store('theme/logos', 'public');
+                $logoPath = $this->imageService->convertToWebP(
+                    $logo,
+                    'theme/logos',
+                    90, // higher quality for logo
+                    800 // max width for logo
+                );
 
                 // Set proper permissions
                 $fullPath = storage_path('app/public/' . $logoPath);
@@ -262,7 +275,12 @@ class SettingTokoController extends Controller
                 }
 
                 $favicon = $request->file('favicon');
-                $faviconPath = $favicon->store('theme/favicons', 'public');
+                $faviconPath = $this->imageService->convertToWebP(
+                    $favicon,
+                    'theme/favicons',
+                    90, // higher quality for favicon
+                    256 // small size for favicon
+                );
 
                 // Set proper permissions
                 $fullPath = storage_path('app/public/' . $faviconPath);
@@ -361,7 +379,13 @@ class SettingTokoController extends Controller
                         'mime' => $slide->getMimeType()
                     ]);
 
-                    $slidePath = $slide->store('theme/slides', 'public');
+                    // Convert slide to WebP for optimization
+                    $slidePath = $this->imageService->convertToWebP(
+                        $slide,
+                        'theme/slides',
+                        85, // good quality for slides
+                        1920 // max width for slides (full HD)
+                    );
                     $data["slide_$i"] = $slidePath;
 
                     // Set proper permissions (775)
@@ -378,16 +402,12 @@ class SettingTokoController extends Controller
                         'path' => $slidePath,
                         'full_path' => $fullPath,
                         'exists' => $fileExists,
-                        'size' => $fileSize,
-                        'original_size' => $slide->getSize()
+                        'size' => $fileSize
                     ]);
 
-                    // Throw error if file doesn't exist or size mismatch
+                    // Throw error if file doesn't exist
                     if (!$fileExists) {
                         throw new \Exception("Failed to save slide_$i: File does not exist after upload");
-                    }
-                    if ($fileSize !== $slide->getSize()) {
-                        throw new \Exception("Failed to save slide_$i: File size mismatch (uploaded: {$slide->getSize()}, saved: $fileSize)");
                     }
                 }
             }
@@ -675,7 +695,12 @@ class SettingTokoController extends Controller
                 }
 
                 $ogImage = $request->file('og_image');
-                $ogImagePath = $ogImage->store('theme/seo', 'public');
+                $ogImagePath = $this->imageService->convertToWebP(
+                    $ogImage,
+                    'theme/seo',
+                    85, // good quality for OG image
+                    1200 // standard OG image width
+                );
 
                 // Set proper permissions
                 $fullPath = storage_path('app/public/' . $ogImagePath);

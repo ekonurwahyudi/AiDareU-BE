@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\ProductVariantOption;
 use App\Models\Category;
+use App\Services\ImageOptimizationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
@@ -16,6 +17,13 @@ use Illuminate\Support\Str;
 
 class ProductController extends Controller
 {
+    protected ImageOptimizationService $imageService;
+    
+    public function __construct(ImageOptimizationService $imageService)
+    {
+        $this->imageService = $imageService;
+    }
+    
     /**
      * Display a listing of products.
      */
@@ -224,24 +232,25 @@ class ProductController extends Controller
             DB::beginTransaction();
 
             try {
-                // Handle product image uploads
+                // Handle product image uploads - convert to WebP for optimization
                 $imagePaths = [];
                 if ($request->hasFile('images')) {
-                    foreach ($request->file('images') as $index => $image) {
-                        if ($index >= 10) break; // Limit to 10 images
-
-                        $filename = Str::uuid() . '.' . $image->getClientOriginalExtension();
-                        $path = $image->storeAs('products', $filename, 'public');
-                        $imagePaths[] = $path;
-                    }
+                    $imagePaths = $this->imageService->convertMultipleToWebP(
+                        $request->file('images'),
+                        'products',
+                        10 // max 10 images
+                    );
                 }
 
-                // Handle size guide image upload
+                // Handle size guide image upload - also convert to WebP
                 $sizeGuidePath = null;
                 if ($request->hasFile('size_guide_image')) {
-                    $sizeGuideFile = $request->file('size_guide_image');
-                    $filename = 'size-guide-' . Str::uuid() . '.' . $sizeGuideFile->getClientOriginalExtension();
-                    $sizeGuidePath = $sizeGuideFile->storeAs('size-guides', $filename, 'public');
+                    $sizeGuidePath = $this->imageService->convertToWebP(
+                        $request->file('size_guide_image'),
+                        'size-guides',
+                        85, // slightly higher quality for size guide
+                        1500 // larger max width for size guide
+                    );
                 }
 
                 $productData = $request->except(['images', 'size_guide_image', 'variants']);
@@ -478,7 +487,7 @@ class ProductController extends Controller
                 $updateData['berat_produk'] = 1000; // Default 1kg
             }
 
-            // Handle new image uploads
+            // Handle new image uploads - convert to WebP for optimization
             if ($request->hasFile('images')) {
                 // Delete old images
                 if ($product->upload_gambar_produk) {
@@ -487,14 +496,12 @@ class ProductController extends Controller
                     }
                 }
 
-                $imagePaths = [];
-                foreach ($request->file('images') as $index => $image) {
-                    if ($index >= 10) break; // Limit to 10 images
-
-                    $filename = Str::uuid() . '.' . $image->getClientOriginalExtension();
-                    $path = $image->storeAs('products', $filename, 'public');
-                    $imagePaths[] = $path;
-                }
+                // Convert new images to WebP
+                $imagePaths = $this->imageService->convertMultipleToWebP(
+                    $request->file('images'),
+                    'products',
+                    10 // max 10 images
+                );
 
                 $updateData['upload_gambar_produk'] = $imagePaths;
             }
@@ -507,16 +514,19 @@ class ProductController extends Controller
                 }
                 $updateData['size_guide_image'] = null;
             }
-            // Handle size guide image upload
+            // Handle size guide image upload - convert to WebP
             elseif ($request->hasFile('size_guide_image')) {
                 // Delete old size guide image
                 if ($product->size_guide_image) {
                     Storage::disk('public')->delete($product->size_guide_image);
                 }
 
-                $sizeGuideFile = $request->file('size_guide_image');
-                $filename = 'size-guide-' . Str::uuid() . '.' . $sizeGuideFile->getClientOriginalExtension();
-                $sizeGuidePath = $sizeGuideFile->storeAs('size-guides', $filename, 'public');
+                $sizeGuidePath = $this->imageService->convertToWebP(
+                    $request->file('size_guide_image'),
+                    'size-guides',
+                    85, // slightly higher quality for size guide
+                    1500 // larger max width for size guide
+                );
                 $updateData['size_guide_image'] = $sizeGuidePath;
             }
 
