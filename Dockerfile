@@ -7,7 +7,8 @@ RUN apk add --no-cache \
     git zip unzip \
     libpq-dev icu-dev oniguruma-dev \
     libpng-dev libjpeg-turbo-dev freetype-dev \
-  && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    libwebp-dev \
+  && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
   && docker-php-ext-install intl mbstring bcmath pdo_pgsql gd
 
 # Tambahkan Composer
