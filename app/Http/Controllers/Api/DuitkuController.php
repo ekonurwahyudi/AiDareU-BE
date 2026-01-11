@@ -20,14 +20,19 @@ class DuitkuController extends Controller
     public function __construct()
     {
         // Ambil dari environment variable
-        $this->merchantCode = env('DUITKU_MERCHANT_CODE', 'D21180');
-        $this->apiKey = env('DUITKU_API_KEY');
+        // Default: D19704 (sandbox merchant code)
+        $this->merchantCode = env('DUITKU_MERCHANT_CODE', 'D19704');
+        $this->apiKey = env('DUITKU_API_KEY', '5bcc9617d7ed80563ff594335ec4b');
+        // Default: true (sandbox mode)
         $this->sandboxMode = filter_var(env('DUITKU_SANDBOX', true), FILTER_VALIDATE_BOOLEAN);
         
         Log::info('DuitkuController initialized', [
             'merchant_code' => $this->merchantCode,
             'api_key_set' => !empty($this->apiKey),
             'sandbox_mode' => $this->sandboxMode,
+            'endpoint' => $this->sandboxMode 
+                ? 'https://sandbox.duitku.com/webapi/api/merchant/v2/inquiry'
+                : 'https://passport.duitku.com/webapi/api/merchant/v2/inquiry',
         ]);
     }
 
