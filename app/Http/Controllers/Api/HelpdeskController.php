@@ -454,4 +454,85 @@ class HelpdeskController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Update ticket status (superadmin only)
+     */
+    public function updateStatus(Request $request, $identifier)
+    {
+        try {
+            $user = Auth::user();
+
+            // Check if user is superadmin
+            if (!$user->hasRole('superadmin')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized. Only superadmin can update ticket status.'
+                ], 403);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'status' => 'required|in:open,in_progress,closed',
+            ], [
+                'status.required' => 'Status harus diisi',
+                'status.in' => 'Status tidak valid. Pilih: open, in_progress, atau closed',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation error',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $query = Helpdesk::query();
+
+            // Check if identifier is UUID or ticket number
+            if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $identifier)) {
+                $query->where('uuid', $identifier);
+            } else {
+                $query->where('ticket_number', $identifier);
+            }
+
+            $ticket = $query->first();
+
+            if (!$ticket) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Ticket not found'
+                ], 404);
+            }
+
+            $oldStatus = $ticket->status;
+            $newStatus = $request->status;
+
+            $ticket->update(['status' => $newStatus]);
+
+            Log::info('Helpdesk ticket status updated by superadmin', [
+                'ticket_number' => $ticket->ticket_number,
+                'old_status' => $oldStatus,
+                'new_status' => $newStatus,
+                'updated_by' => $user->id,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Status tiket berhasil diubah',
+                'data' => $ticket
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error updating ticket status', [
+                'identifier' => $identifier,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update ticket status'
+            ], 500);
+        }
+    }
 }

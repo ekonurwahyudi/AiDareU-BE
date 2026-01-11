@@ -518,6 +518,7 @@ Route::middleware(['web', 'auth:web,sanctum', 'throttle:api'])->prefix('helpdesk
     Route::get('/{ticketNumber}', [HelpdeskController::class, 'show']); // Get ticket detail
     Route::post('/{ticketNumber}/reply', [HelpdeskController::class, 'reply']); // Reply to ticket
     Route::post('/{ticketNumber}/reopen', [HelpdeskController::class, 'reopen']); // Reopen closed ticket
+    Route::put('/{ticketNumber}/status', [HelpdeskController::class, 'updateStatus']); // Update status (superadmin only)
 });
 
 // ============================================================================
