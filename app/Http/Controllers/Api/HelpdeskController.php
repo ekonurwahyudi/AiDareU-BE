@@ -216,9 +216,10 @@ class HelpdeskController extends Controller
                 ];
             }
 
-            // Create first detail/message
+            // Create first detail/message - include helpdesk_uuid for better data sync
             $detail = HelpdeskDetail::create([
                 'helpdesk_id' => $ticket->id,
+                'helpdesk_uuid' => $ticket->uuid,
                 'user_id' => $user->id,
                 'message' => strip_tags($request->message, '<p><br><b><i><u><ul><ol><li><a>'), // Allow some safe HTML tags
                 'type' => 'question',
@@ -285,14 +286,20 @@ class HelpdeskController extends Controller
             }
 
             $user = Auth::user();
+            $isSuperadmin = $user->hasRole('superadmin');
 
-            $query = Helpdesk::where('user_id', $user->id);
+            $query = Helpdesk::query();
 
             // Check if identifier is UUID or ticket number
             if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $identifier)) {
                 $query->where('uuid', $identifier);
             } else {
                 $query->where('ticket_number', $identifier);
+            }
+
+            // If not superadmin, must be ticket owner
+            if (!$isSuperadmin) {
+                $query->where('user_id', $user->id);
             }
 
             $ticket = $query->first();
@@ -349,20 +356,26 @@ class HelpdeskController extends Controller
                 ];
             }
 
-            // Create reply
+            // Create reply - include helpdesk_uuid for better data sync
             $detail = HelpdeskDetail::create([
                 'helpdesk_id' => $ticket->id,
+                'helpdesk_uuid' => $ticket->uuid,
                 'user_id' => $user->id,
                 'message' => strip_tags($request->message, '<p><br><b><i><u><ul><ol><li><a>'),
-                'type' => 'question',
+                'type' => $isSuperadmin ? 'answer' : 'question',
+                'pic' => $isSuperadmin ? $user->name : null,
                 'file_path' => $fileData['file_path'] ?? null,
                 'file_name' => $fileData['file_name'] ?? null,
                 'file_type' => $fileData['file_type'] ?? null,
                 'file_size' => $fileData['file_size'] ?? null,
             ]);
 
-            // Update ticket status to waiting_reply
-            $ticket->update(['status' => 'waiting_reply']);
+            // Update ticket status based on who replied
+            if ($isSuperadmin) {
+                $ticket->update(['status' => 'replied']);
+            } else {
+                $ticket->update(['status' => 'waiting_reply']);
+            }
 
             DB::commit();
 

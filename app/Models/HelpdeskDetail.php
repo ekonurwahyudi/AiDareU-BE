@@ -11,6 +11,7 @@ class HelpdeskDetail extends Model
     protected $fillable = [
         'uuid',
         'helpdesk_id',
+        'helpdesk_uuid',
         'user_id',
         'message',
         'type',
