@@ -30,6 +30,7 @@ use App\Http\Controllers\AIProductPhotoController;
 use App\Http\Controllers\AIMergePhotoController;
 use App\Http\Controllers\AIFashionPhotoController;
 use App\Http\Controllers\CoinTransactionController;
+use App\Http\Controllers\Api\HelpdeskController;
 
 /*
 |--------------------------------------------------------------------------
@@ -506,6 +507,17 @@ Route::middleware(['web', 'auth:web,sanctum', 'throttle:payment'])->prefix('paym
     Route::post('/create', [\App\Http\Controllers\Api\DuitkuController::class, 'createPayment']);
     Route::get('/status/{merchantOrderId}', [\App\Http\Controllers\Api\DuitkuController::class, 'checkStatus']);
     Route::get('/methods', [\App\Http\Controllers\Api\DuitkuController::class, 'getPaymentMethods']);
+});
+
+// ============================================================================
+// HELPDESK ROUTES (Protected)
+// ============================================================================
+Route::middleware(['web', 'auth:web,sanctum', 'throttle:api'])->prefix('helpdesk')->group(function () {
+    Route::get('/', [HelpdeskController::class, 'index']); // Get all user tickets
+    Route::post('/', [HelpdeskController::class, 'store']); // Create new ticket
+    Route::get('/{ticketNumber}', [HelpdeskController::class, 'show']); // Get ticket detail
+    Route::post('/{ticketNumber}/reply', [HelpdeskController::class, 'reply']); // Reply to ticket
+    Route::post('/{ticketNumber}/reopen', [HelpdeskController::class, 'reopen']); // Reopen closed ticket
 });
 
 // ============================================================================
