@@ -20,16 +20,20 @@ class DuitkuController extends Controller
     public function __construct()
     {
         // Ambil dari environment variable
-        $this->merchantCode = env('DUITKU_MERCHANT_CODE', 'D21180');
+        // PENTING: Pastikan DUITKU_MERCHANT_CODE di .env sesuai dengan merchant code dari dashboard Duitku
+        $this->merchantCode = env('DUITKU_MERCHANT_CODE', 'D19704');
         $this->apiKey = env('DUITKU_API_KEY');
-        // PENTING: Set false untuk production karena merchant code D21180 adalah production
+        // PENTING: Set false untuk production
         $this->sandboxMode = filter_var(env('DUITKU_SANDBOX', false), FILTER_VALIDATE_BOOLEAN);
         
         Log::info('DuitkuController initialized', [
             'merchant_code' => $this->merchantCode,
+            'merchant_code_length' => strlen($this->merchantCode),
             'api_key_set' => !empty($this->apiKey),
+            'api_key_length' => $this->apiKey ? strlen($this->apiKey) : 0,
             'sandbox_mode' => $this->sandboxMode,
             'sandbox_env_raw' => env('DUITKU_SANDBOX'),
+            'env_merchant_code' => env('DUITKU_MERCHANT_CODE'),
         ]);
     }
 

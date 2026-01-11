@@ -505,6 +505,30 @@ Route::middleware(['web', 'auth:web,sanctum', 'throttle:api'])->prefix('coins')-
 Route::middleware(['web', 'auth:web,sanctum', 'throttle:payment'])->prefix('payment/duitku')->group(function () {
     Route::post('/create', [\App\Http\Controllers\Api\DuitkuController::class, 'createPayment']);
     Route::get('/status/{merchantOrderId}', [\App\Http\Controllers\Api\DuitkuController::class, 'checkStatus']);
+    
+    // Debug endpoint - untuk cek konfigurasi (hanya tampilkan info non-sensitif)
+    Route::get('/debug-config', function () {
+        $merchantCode = env('DUITKU_MERCHANT_CODE', 'NOT_SET');
+        $apiKey = env('DUITKU_API_KEY');
+        $sandbox = env('DUITKU_SANDBOX', 'NOT_SET');
+        
+        return response()->json([
+            'merchant_code' => $merchantCode,
+            'merchant_code_length' => strlen($merchantCode),
+            'api_key_set' => !empty($apiKey),
+            'api_key_length' => $apiKey ? strlen($apiKey) : 0,
+            'api_key_preview' => $apiKey ? substr($apiKey, 0, 4) . '****' : 'NOT_SET',
+            'sandbox_mode' => $sandbox,
+            'sandbox_parsed' => filter_var($sandbox, FILTER_VALIDATE_BOOLEAN),
+            'endpoint' => filter_var($sandbox, FILTER_VALIDATE_BOOLEAN) 
+                ? 'https://api-sandbox.duitku.com/api/merchant/createinvoice'
+                : 'https://api-prod.duitku.com/api/merchant/createinvoice',
+            'env_file_check' => [
+                'APP_ENV' => env('APP_ENV'),
+                'APP_DEBUG' => env('APP_DEBUG'),
+            ]
+        ]);
+    });
 });
 
 // ============================================================================
