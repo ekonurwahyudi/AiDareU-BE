@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Validator;
 class HelpdeskController extends Controller
 {
     /**
-     * Get all tickets for authenticated user
+     * Get all tickets for authenticated user (or all tickets if superadmin)
      */
     public function index(Request $request)
     {
@@ -24,9 +24,16 @@ class HelpdeskController extends Controller
 
             $query = Helpdesk::with(['user', 'details' => function($q) {
                 $q->latest()->take(1);
-            }])
-            ->where('user_id', $user->id)
-            ->orderBy('created_at', 'desc');
+            }]);
+
+            // Check if user is superadmin - if not, filter by user_id
+            $isSuperadmin = $user->hasRole('superadmin');
+
+            if (!$isSuperadmin) {
+                $query->where('user_id', $user->id);
+            }
+
+            $query->orderBy('created_at', 'desc');
 
             // Filter by status if provided
             if ($request->has('status')) {
@@ -48,7 +55,8 @@ class HelpdeskController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $tickets
+                'data' => $tickets,
+                'is_superadmin' => $isSuperadmin
             ]);
         } catch (\Exception $e) {
             Log::error('Error fetching helpdesk tickets', [
@@ -70,11 +78,17 @@ class HelpdeskController extends Controller
     {
         try {
             $user = Auth::user();
+            $isSuperadmin = $user->hasRole('superadmin');
 
-            $ticket = Helpdesk::with(['user', 'details.user'])
-                ->where('ticket_number', $ticketNumber)
-                ->where('user_id', $user->id)
-                ->first();
+            $query = Helpdesk::with(['user', 'details.user'])
+                ->where('ticket_number', $ticketNumber);
+
+            // If not superadmin, must be ticket owner
+            if (!$isSuperadmin) {
+                $query->where('user_id', $user->id);
+            }
+
+            $ticket = $query->first();
 
             if (!$ticket) {
                 return response()->json([
@@ -88,7 +102,8 @@ class HelpdeskController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data' => $ticket
+                'data' => $ticket,
+                'is_superadmin' => $isSuperadmin
             ]);
         } catch (\Exception $e) {
             Log::error('Error fetching ticket detail', [
