@@ -75,32 +75,15 @@ class DuitkuController extends Controller
             ]);
 
             // Prepare request data untuk v2/inquiry (QRIS Direct) sesuai dokumentasi
+            // Referensi: https://docs.duitku.com/api/id/#metode-pembayaran
             $requestData = [
                 'merchantCode' => $this->merchantCode,
                 'paymentAmount' => $paymentAmount,
-                'paymentMethod' => 'SP', // SP = Shopee Pay QRIS (bisa juga NQ, GQ, SQ)
+                'paymentMethod' => 'SP', // SP = Shopee Pay QRIS
                 'merchantOrderId' => $merchantOrderId,
                 'productDetails' => "Top Up {$coinAmount} Coin AiDareU",
-                'additionalParam' => '',
-                'merchantUserInfo' => $user->email,
-                'customerVaName' => $user->name ?? 'User',
                 'email' => $user->email,
-                'phoneNumber' => $user->phone ?? '',
-                'itemDetails' => [
-                    [
-                        'name' => "Top Up {$coinAmount} Coin",
-                        'price' => $paymentAmount,
-                        'quantity' => 1
-                    ]
-                ],
-                'customerDetail' => [
-                    'firstName' => $user->name ?? 'User',
-                    'lastName' => '',
-                    'email' => $user->email,
-                    'phoneNumber' => $user->phone ?? '',
-                    'billingAddress' => [],
-                    'shippingAddress' => []
-                ],
+                'customerVaName' => $user->name ?? 'User',
                 'callbackUrl' => url('/api/payment/duitku/callback'),
                 'returnUrl' => env('APP_FRONTEND_URL', 'https://aidareu.com') . '/apps/tokoku/coin-history',
                 'signature' => $signature,
