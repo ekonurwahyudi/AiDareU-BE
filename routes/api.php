@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\SettingTokoController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\CustomerManagementController;
 use App\Http\Controllers\Api\UserManagementController;
+use App\Http\Controllers\Api\PlatformManagementController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\ProductDigitalController;
 use App\Http\Controllers\Api\NotificationController;
@@ -208,6 +209,15 @@ Route::middleware(['throttle:api', 'web', 'auth:web,sanctum'])->group(function (
     Route::post('/management/users', [UserManagementController::class, 'store']);
     Route::put('/management/users/{uuid}', [UserManagementController::class, 'update']);
     Route::delete('/management/users/{uuid}', [UserManagementController::class, 'destroy']);
+});
+
+// Master Data: Platform Management (protected)
+Route::middleware(['throttle:api', 'web', 'auth:web,sanctum'])->group(function () {
+    Route::get('/management/platforms', [PlatformManagementController::class, 'index']);
+    Route::get('/management/platforms/{uuid}', [PlatformManagementController::class, 'show']);
+    Route::post('/management/platforms', [PlatformManagementController::class, 'store']);
+    Route::put('/management/platforms/{uuid}', [PlatformManagementController::class, 'update']);
+    Route::delete('/management/platforms/{uuid}', [PlatformManagementController::class, 'destroy']);
 });
 
 // Public: Products API (rate limited)
