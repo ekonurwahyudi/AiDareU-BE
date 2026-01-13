@@ -87,9 +87,16 @@ class SettingTokoController extends Controller
 
             // Get store owner and check for platformpreneur
             $platformpreneur = null;
-            $storeOwner = $store->users()->first(); // Get the store owner
-            if ($storeOwner && $storeOwner->info_dari) {
-                $platformpreneur = \App\Models\Platformpreneur::whereRaw('LOWER(username) = ?', [strtolower($storeOwner->info_dari)])->first();
+            try {
+                $storeOwner = $store->user; // Get the store owner via user_id (UUID) relationship
+                if ($storeOwner && $storeOwner->info_dari) {
+                    $platformpreneur = \App\Models\Platformpreneur::whereRaw('LOWER(username) = ?', [strtolower($storeOwner->info_dari)])->first();
+                }
+            } catch (\Exception $e) {
+                \Log::warning('Failed to get platformpreneur for store', [
+                    'subdomain' => $subdomain,
+                    'error' => $e->getMessage()
+                ]);
             }
 
             // Get products
