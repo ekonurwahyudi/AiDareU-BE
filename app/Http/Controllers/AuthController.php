@@ -561,6 +561,7 @@ class AuthController extends Controller
                         'perusahaan' => $platformpreneur->perusahaan,
                         'logo' => $platformpreneur->logo,
                         'logo_footer' => $platformpreneur->logo_footer,
+                        'domain' => $platformpreneur->domain,
                     ] : null
                 ]
             ]);

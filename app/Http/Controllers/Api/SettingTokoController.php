@@ -85,6 +85,13 @@ class SettingTokoController extends Controller
             $testimonials = TestimoniToko::where('uuid_store', $storeUuid)->get();
             $seo = SeoToko::where('uuid_store', $storeUuid)->first();
 
+            // Get store owner and check for platformpreneur
+            $platformpreneur = null;
+            $storeOwner = $store->users()->first(); // Get the store owner
+            if ($storeOwner && $storeOwner->info_dari) {
+                $platformpreneur = \App\Models\Platformpreneur::whereRaw('LOWER(username) = ?', [strtolower($storeOwner->info_dari)])->first();
+            }
+
             // Get products
             $products = \App\Models\Product::where('uuid_store', $storeUuid)
                 ->where('status_produk', 'active')
@@ -139,6 +146,14 @@ class SettingTokoController extends Controller
                     'testimonials' => $testimonials,
                     'seo' => $seo,
                     'products' => $products,
+                    'platformpreneur' => $platformpreneur ? [
+                        'username' => $platformpreneur->username,
+                        'judul' => $platformpreneur->judul,
+                        'perusahaan' => $platformpreneur->perusahaan,
+                        'logo' => $platformpreneur->logo,
+                        'logo_footer' => $platformpreneur->logo_footer,
+                        'domain' => $platformpreneur->domain,
+                    ] : null,
                 ]
             ]);
         } catch (\Exception $e) {
