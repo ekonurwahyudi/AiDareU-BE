@@ -28,7 +28,7 @@ class AuthController extends Controller
             'no_hp' => 'required|string|min:10|max:15',
             'password' => 'required|string|min:8',
             'alasan_gabung' => 'required|string|min:10',
-            'info_dari' => 'required|string|in:sosial_media,grup_komunitas,iklan,google,teman_saudara,lainnya'
+            'info_dari' => 'required|string|in:sosial_media,grup_komunitas,iklan,google,teman_saudara,umkdigital.id,lainnya'
         ]);
 
         if ($validator->fails()) {
@@ -527,6 +527,12 @@ class AuthController extends Controller
     {
         try {
             $user = $request->user();
+            
+            // Check if user's info_dari matches a platformpreneur username
+            $platformpreneur = null;
+            if ($user->info_dari) {
+                $platformpreneur = \App\Models\Platformpreneur::where('username', $user->info_dari)->first();
+            }
 
             return response()->json([
                 'user' => [
@@ -537,9 +543,17 @@ class AuthController extends Controller
                     'phone' => $user->phone,
                     'paket' => $user->paket ?? 'Freemium',
                     'image' => $user->avatar,
+                    'info_dari' => $user->info_dari,
                     'email_verified_at' => $user->email_verified_at,
                     'roles' => $user->getRoleNames(),
-                    'permissions' => $user->getAllPermissions()->pluck('name')
+                    'permissions' => $user->getAllPermissions()->pluck('name'),
+                    'platformpreneur' => $platformpreneur ? [
+                        'username' => $platformpreneur->username,
+                        'judul' => $platformpreneur->judul,
+                        'perusahaan' => $platformpreneur->perusahaan,
+                        'logo' => $platformpreneur->logo,
+                        'logo_footer' => $platformpreneur->logo_footer,
+                    ] : null
                 ]
             ]);
 
