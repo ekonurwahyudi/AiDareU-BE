@@ -528,10 +528,18 @@ class AuthController extends Controller
         try {
             $user = $request->user();
             
-            // Check if user's info_dari matches a platformpreneur username
+            // Check if user's info_dari matches a platformpreneur username (case-insensitive)
             $platformpreneur = null;
             if ($user->info_dari) {
-                $platformpreneur = \App\Models\Platformpreneur::where('username', $user->info_dari)->first();
+                $platformpreneur = \App\Models\Platformpreneur::whereRaw('LOWER(username) = ?', [strtolower($user->info_dari)])->first();
+                
+                // Debug log
+                Log::info('Platformpreneur lookup', [
+                    'user_id' => $user->id,
+                    'info_dari' => $user->info_dari,
+                    'found' => $platformpreneur ? true : false,
+                    'logo' => $platformpreneur?->logo
+                ]);
             }
 
             return response()->json([
