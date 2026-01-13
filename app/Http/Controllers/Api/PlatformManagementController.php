@@ -16,17 +16,6 @@ class PlatformManagementController extends Controller
     private const ALLOWED_DOCUMENT_MIMES = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
     private const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/jpg'];
 
-    private function checkSuperadminAccess(): bool
-    {
-        $user = Auth::user();
-        return $user && $user->role === 'superadmin';
-    }
-
-    private function unauthorizedResponse()
-    {
-        return response()->json(['status' => 'error', 'message' => 'Anda tidak memiliki akses untuk fitur ini.'], 403);
-    }
-
     private function isValidUuid(string $uuid): bool
     {
         return preg_match(self::UUID_PATTERN, $uuid) === 1;
@@ -44,10 +33,6 @@ class PlatformManagementController extends Controller
 
     public function index(Request $request)
     {
-        if (!$this->checkSuperadminAccess()) {
-            return $this->unauthorizedResponse();
-        }
-
         try {
             $perPage = min((int) $request->get('per_page', 10), 100);
             $search = $this->sanitizeInput($request->get('search'));
@@ -77,9 +62,6 @@ class PlatformManagementController extends Controller
 
     public function show($uuid)
     {
-        if (!$this->checkSuperadminAccess()) {
-            return $this->unauthorizedResponse();
-        }
         if (!$this->isValidUuid($uuid)) {
             return response()->json(['status' => 'error', 'message' => 'Format UUID tidak valid.'], 400);
         }
@@ -98,13 +80,8 @@ class PlatformManagementController extends Controller
         }
     }
 
-
     public function store(Request $request)
     {
-        if (!$this->checkSuperadminAccess()) {
-            return $this->unauthorizedResponse();
-        }
-
         try {
             $validator = Validator::make($request->all(), [
                 'no_kontrak' => 'required|string|max:100|unique:platformpreneur,no_kontrak',
@@ -181,9 +158,6 @@ class PlatformManagementController extends Controller
 
     public function update(Request $request, $uuid)
     {
-        if (!$this->checkSuperadminAccess()) {
-            return $this->unauthorizedResponse();
-        }
         if (!$this->isValidUuid($uuid)) {
             return response()->json(['status' => 'error', 'message' => 'Format UUID tidak valid.'], 400);
         }
@@ -271,12 +245,8 @@ class PlatformManagementController extends Controller
         }
     }
 
-
     public function destroy($uuid)
     {
-        if (!$this->checkSuperadminAccess()) {
-            return $this->unauthorizedResponse();
-        }
         if (!$this->isValidUuid($uuid)) {
             return response()->json(['status' => 'error', 'message' => 'Format UUID tidak valid.'], 400);
         }
