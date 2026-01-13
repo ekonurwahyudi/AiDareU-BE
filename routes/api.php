@@ -429,6 +429,7 @@ Route::middleware(['web', 'auth:web,sanctum', 'throttle:api'])->group(function (
     // Product Routes
     Route::prefix('products')->group(function () {
         Route::get('/', [ProductController::class, 'index']);
+        Route::get('/stats', [ProductController::class, 'stats']);
         Route::post('/', [ProductController::class, 'store']);
         Route::get('/store/{storeUuid}', [ProductController::class, 'getByStore']);
         Route::get('/{product}', [ProductController::class, 'show']);

@@ -714,4 +714,59 @@ class ProductController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get product statistics
+     */
+    public function stats(Request $request): JsonResponse
+    {
+        try {
+            // Get authenticated user
+            $user = null;
+            if ($request->bearerToken()) {
+                $user = auth('sanctum')->user();
+            }
+            if (!$user) {
+                $user = auth('web')->user();
+            }
+            if (!$user && $request->header('X-User-UUID')) {
+                $uuid = $request->header('X-User-UUID');
+                $user = \App\Models\User::where('uuid', $uuid)->first();
+            }
+
+            // Check if user is superadmin
+            $isSuperadmin = $user && $user->hasRole('superadmin');
+
+            // Build base query
+            $query = Product::query();
+
+            // If not superadmin, filter by user's stores
+            if (!$isSuperadmin && $user) {
+                $storeUuids = $user->stores()->pluck('uuid')->toArray();
+                $query->whereIn('uuid_store', $storeUuids);
+            }
+
+            // Get counts for each status
+            $total = (clone $query)->count();
+            $active = (clone $query)->where('status', 'active')->count();
+            $inactive = (clone $query)->where('status', 'inactive')->count();
+            $draft = (clone $query)->where('status', 'draft')->count();
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'total' => $total,
+                    'active' => $active,
+                    'inactive' => $inactive,
+                    'draft' => $draft
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to retrieve product stats: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal mengambil statistik produk. Silakan coba lagi.'
+            ], 500);
+        }
+    }
 }

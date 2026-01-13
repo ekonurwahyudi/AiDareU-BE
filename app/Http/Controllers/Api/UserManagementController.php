@@ -121,7 +121,7 @@ class UserManagementController extends Controller
                 'roles.*' => 'string|exists:roles,name',
                 'is_active' => 'nullable|boolean',
                 'alasan_gabung' => 'nullable|string',
-                'info_dari' => 'nullable|string|max:255',
+                'info_dari' => 'nullable|string|in:sosial_media,grup_komunitas,iklan,google,teman_saudara,umkdigital.id,lainnya',
                 'location' => 'nullable|string|max:255',
                 'address' => 'nullable|string',
                 'paket' => 'nullable|string|max:255'
@@ -189,7 +189,7 @@ class UserManagementController extends Controller
                 'roles.*' => 'string|exists:roles,name',
                 'is_active' => 'nullable|boolean',
                 'alasan_gabung' => 'nullable|string',
-                'info_dari' => 'nullable|string|max:255',
+                'info_dari' => 'nullable|string|in:sosial_media,grup_komunitas,iklan,google,teman_saudara,umkdigital.id,lainnya',
                 'location' => 'nullable|string|max:255',
                 'address' => 'nullable|string',
                 'paket' => 'nullable|string|max:255'
