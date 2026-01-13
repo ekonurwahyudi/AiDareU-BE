@@ -7,260 +7,287 @@ use App\Models\Platformpreneur;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 
 class PlatformManagementController extends Controller
 {
-    /**
-     * Get all platforms with pagination (for master data)
-     */
+    private const UUID_PATTERN = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i';
+    private const ALLOWED_DOCUMENT_MIMES = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    private const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/jpg'];
+
+    private function checkSuperadminAccess(): bool
+    {
+        $user = Auth::user();
+        return $user && $user->role === 'superadmin';
+    }
+
+    private function unauthorizedResponse()
+    {
+        return response()->json(['status' => 'error', 'message' => 'Anda tidak memiliki akses untuk fitur ini.'], 403);
+    }
+
+    private function isValidUuid(string $uuid): bool
+    {
+        return preg_match(self::UUID_PATTERN, $uuid) === 1;
+    }
+
+    private function sanitizeInput(?string $value): ?string
+    {
+        return $value === null ? null : trim(strip_tags($value));
+    }
+
+    private function verifyFileMimeType($file, array $allowedMimes): bool
+    {
+        return in_array($file->getMimeType(), $allowedMimes);
+    }
+
     public function index(Request $request)
     {
-        try {
-            $perPage = $request->get('per_page', 10);
-            $search = $request->get('search');
+        if (!$this->checkSuperadminAccess()) {
+            return $this->unauthorizedResponse();
+        }
 
+        try {
+            $perPage = min((int) $request->get('per_page', 10), 100);
+            $search = $this->sanitizeInput($request->get('search'));
             $query = Platformpreneur::query();
 
-            // Search filter
             if ($search) {
                 $query->where(function($q) use ($search) {
-                    $q->where('no_kontrak', 'like', "%{$search}%")
-                      ->orWhere('judul', 'like', "%{$search}%")
-                      ->orWhere('perusahaan', 'like', "%{$search}%")
-                      ->orWhere('domain', 'like', "%{$search}%")
-                      ->orWhere('nama', 'like', "%{$search}%")
-                      ->orWhere('email', 'like', "%{$search}%");
+                    $q->where('no_kontrak', 'ilike', "%{$search}%")
+                      ->orWhere('judul', 'ilike', "%{$search}%")
+                      ->orWhere('perusahaan', 'ilike', "%{$search}%")
+                      ->orWhere('domain', 'ilike', "%{$search}%")
+                      ->orWhere('nama', 'ilike', "%{$search}%")
+                      ->orWhere('email', 'ilike', "%{$search}%");
                 });
             }
 
-            $platforms = $query->orderBy('created_at', 'desc')
-                              ->paginate($perPage);
+            $platforms = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
-            return response()->json([
-                'status' => 'success',
-                'data' => $platforms
-            ]);
+            Log::info('Platform list accessed', ['user_id' => Auth::id(), 'search' => $search, 'total' => $platforms->total()]);
 
+            return response()->json(['status' => 'success', 'data' => $platforms]);
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Failed to get platforms: ' . $e->getMessage());
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Gagal mengambil data platform. Silakan coba lagi.'
-            ], 500);
+            Log::error('Failed to get platforms: ' . $e->getMessage(), ['user_id' => Auth::id()]);
+            return response()->json(['status' => 'error', 'message' => 'Gagal mengambil data platform.'], 500);
         }
     }
 
-    /**
-     * Get a single platform by UUID
-     */
     public function show($uuid)
     {
+        if (!$this->checkSuperadminAccess()) {
+            return $this->unauthorizedResponse();
+        }
+        if (!$this->isValidUuid($uuid)) {
+            return response()->json(['status' => 'error', 'message' => 'Format UUID tidak valid.'], 400);
+        }
+
         try {
             $platform = Platformpreneur::where('uuid', $uuid)->first();
-
             if (!$platform) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Platform not found'
-                ], 404);
+                return response()->json(['status' => 'error', 'message' => 'Platform tidak ditemukan.'], 404);
             }
 
-            return response()->json([
-                'status' => 'success',
-                'data' => $platform
-            ]);
-
+            Log::info('Platform detail accessed', ['user_id' => Auth::id(), 'platform_uuid' => $uuid]);
+            return response()->json(['status' => 'success', 'data' => $platform]);
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Failed to get platform: ' . $e->getMessage());
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Gagal mengambil data platform. Silakan coba lagi.'
-            ], 500);
+            Log::error('Failed to get platform: ' . $e->getMessage(), ['user_id' => Auth::id(), 'uuid' => $uuid]);
+            return response()->json(['status' => 'error', 'message' => 'Gagal mengambil data platform.'], 500);
         }
     }
 
-    /**
-     * Create a new platform
-     */
+
     public function store(Request $request)
     {
+        if (!$this->checkSuperadminAccess()) {
+            return $this->unauthorizedResponse();
+        }
+
         try {
             $validator = Validator::make($request->all(), [
-                'no_kontrak' => 'required|string|unique:platformpreneur,no_kontrak',
+                'no_kontrak' => 'required|string|max:100|unique:platformpreneur,no_kontrak',
                 'judul' => 'required|string|max:255',
-                'username' => 'required|string|unique:platformpreneur,username',
+                'username' => 'required|string|max:100|unique:platformpreneur,username',
                 'perusahaan' => 'required|string|max:255',
                 'file' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
                 'nama' => 'required|string|max:255',
-                'email' => 'required|email',
+                'email' => 'required|email|max:255',
                 'no_hp' => 'required|string|max:20',
                 'lokasi' => 'required|string|max:255',
                 'logo' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
                 'logo_footer' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
-                'coin_user' => 'required|integer|min:0',
-                'kuota_user' => 'required|integer|min:0',
-                'domain' => 'required|string|unique:platformpreneur,domain',
+                'coin_user' => 'required|integer|min:0|max:999999999',
+                'kuota_user' => 'required|integer|min:0|max:999999999',
+                'domain' => 'required|string|max:255|unique:platformpreneur,domain',
                 'tgl_mulai' => 'required|date',
                 'tgl_akhir' => 'required|date|after:tgl_mulai'
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
+                return response()->json(['status' => 'error', 'message' => 'Validasi gagal.', 'errors' => $validator->errors()], 422);
             }
 
-            $platformData = $request->only([
-                'no_kontrak', 'judul', 'username', 'perusahaan', 'nama',
-                'email', 'no_hp', 'lokasi', 'coin_user', 'kuota_user',
-                'domain', 'tgl_mulai', 'tgl_akhir'
-            ]);
+            // Verify actual MIME types
+            if ($request->hasFile('file') && !$this->verifyFileMimeType($request->file('file'), self::ALLOWED_DOCUMENT_MIMES)) {
+                return response()->json(['status' => 'error', 'message' => 'Tipe file dokumen tidak valid.'], 422);
+            }
+            if ($request->hasFile('logo') && !$this->verifyFileMimeType($request->file('logo'), self::ALLOWED_IMAGE_MIMES)) {
+                return response()->json(['status' => 'error', 'message' => 'Tipe file logo tidak valid.'], 422);
+            }
+            if ($request->hasFile('logo_footer') && !$this->verifyFileMimeType($request->file('logo_footer'), self::ALLOWED_IMAGE_MIMES)) {
+                return response()->json(['status' => 'error', 'message' => 'Tipe file logo footer tidak valid.'], 422);
+            }
 
-            // Create platform first to get UUID
+            $platformData = [
+                'no_kontrak' => $this->sanitizeInput($request->input('no_kontrak')),
+                'judul' => $this->sanitizeInput($request->input('judul')),
+                'username' => $this->sanitizeInput($request->input('username')),
+                'perusahaan' => $this->sanitizeInput($request->input('perusahaan')),
+                'nama' => $this->sanitizeInput($request->input('nama')),
+                'email' => $this->sanitizeInput($request->input('email')),
+                'no_hp' => $this->sanitizeInput($request->input('no_hp')),
+                'lokasi' => $this->sanitizeInput($request->input('lokasi')),
+                'coin_user' => (int) $request->input('coin_user'),
+                'kuota_user' => (int) $request->input('kuota_user'),
+                'domain' => $this->sanitizeInput($request->input('domain')),
+                'tgl_mulai' => $request->input('tgl_mulai'),
+                'tgl_akhir' => $request->input('tgl_akhir')
+            ];
+
             $platform = Platformpreneur::create($platformData);
 
-            // Handle file uploads
             if ($request->hasFile('file')) {
-                $filePath = $request->file('file')->store('platforms/' . $platform->uuid . '/documents', 'public');
-                $platform->file = $filePath;
+                $platform->file = $request->file('file')->store('platforms/' . $platform->uuid . '/documents', 'public');
             }
-
             if ($request->hasFile('logo')) {
-                $logoPath = $request->file('logo')->store('platforms/' . $platform->uuid . '/logos', 'public');
-                $platform->logo = $logoPath;
+                $platform->logo = $request->file('logo')->store('platforms/' . $platform->uuid . '/logos', 'public');
             }
-
             if ($request->hasFile('logo_footer')) {
-                $logoFooterPath = $request->file('logo_footer')->store('platforms/' . $platform->uuid . '/logos', 'public');
-                $platform->logo_footer = $logoFooterPath;
+                $platform->logo_footer = $request->file('logo_footer')->store('platforms/' . $platform->uuid . '/logos', 'public');
             }
-
             $platform->save();
 
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Platform created successfully',
-                'data' => $platform
-            ], 201);
+            Log::info('Platform created', ['user_id' => Auth::id(), 'platform_uuid' => $platform->uuid, 'name' => $platform->judul]);
 
+            return response()->json(['status' => 'success', 'message' => 'Platform berhasil dibuat.', 'data' => $platform], 201);
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Failed to create platform: ' . $e->getMessage());
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Gagal membuat platform. Silakan coba lagi.'
-            ], 500);
+            Log::error('Failed to create platform: ' . $e->getMessage(), ['user_id' => Auth::id()]);
+            return response()->json(['status' => 'error', 'message' => 'Gagal membuat platform.'], 500);
         }
     }
 
-    /**
-     * Update an existing platform
-     */
+
     public function update(Request $request, $uuid)
     {
+        if (!$this->checkSuperadminAccess()) {
+            return $this->unauthorizedResponse();
+        }
+        if (!$this->isValidUuid($uuid)) {
+            return response()->json(['status' => 'error', 'message' => 'Format UUID tidak valid.'], 400);
+        }
+
         try {
             $platform = Platformpreneur::where('uuid', $uuid)->first();
-
             if (!$platform) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Platform not found'
-                ], 404);
+                return response()->json(['status' => 'error', 'message' => 'Platform tidak ditemukan.'], 404);
             }
 
             $validator = Validator::make($request->all(), [
-                'no_kontrak' => 'sometimes|required|string|unique:platformpreneur,no_kontrak,' . $platform->id,
+                'no_kontrak' => 'sometimes|required|string|max:100|unique:platformpreneur,no_kontrak,' . $platform->id,
                 'judul' => 'sometimes|required|string|max:255',
-                'username' => 'sometimes|required|string|unique:platformpreneur,username,' . $platform->id,
+                'username' => 'sometimes|required|string|max:100|unique:platformpreneur,username,' . $platform->id,
                 'perusahaan' => 'sometimes|required|string|max:255',
                 'file' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
                 'nama' => 'sometimes|required|string|max:255',
-                'email' => 'sometimes|required|email',
+                'email' => 'sometimes|required|email|max:255',
                 'no_hp' => 'sometimes|required|string|max:20',
                 'lokasi' => 'sometimes|required|string|max:255',
                 'logo' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
                 'logo_footer' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
-                'coin_user' => 'sometimes|required|integer|min:0',
-                'kuota_user' => 'sometimes|required|integer|min:0',
-                'domain' => 'sometimes|required|string|unique:platformpreneur,domain,' . $platform->id,
+                'coin_user' => 'sometimes|required|integer|min:0|max:999999999',
+                'kuota_user' => 'sometimes|required|integer|min:0|max:999999999',
+                'domain' => 'sometimes|required|string|max:255|unique:platformpreneur,domain,' . $platform->id,
                 'tgl_mulai' => 'sometimes|required|date',
                 'tgl_akhir' => 'sometimes|required|date|after:tgl_mulai'
             ]);
 
             if ($validator->fails()) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
+                return response()->json(['status' => 'error', 'message' => 'Validasi gagal.', 'errors' => $validator->errors()], 422);
             }
 
-            $platformData = $request->only([
-                'no_kontrak', 'judul', 'username', 'perusahaan', 'nama',
-                'email', 'no_hp', 'lokasi', 'coin_user', 'kuota_user',
-                'domain', 'tgl_mulai', 'tgl_akhir'
-            ]);
+            // Verify actual MIME types
+            if ($request->hasFile('file') && !$this->verifyFileMimeType($request->file('file'), self::ALLOWED_DOCUMENT_MIMES)) {
+                return response()->json(['status' => 'error', 'message' => 'Tipe file dokumen tidak valid.'], 422);
+            }
+            if ($request->hasFile('logo') && !$this->verifyFileMimeType($request->file('logo'), self::ALLOWED_IMAGE_MIMES)) {
+                return response()->json(['status' => 'error', 'message' => 'Tipe file logo tidak valid.'], 422);
+            }
+            if ($request->hasFile('logo_footer') && !$this->verifyFileMimeType($request->file('logo_footer'), self::ALLOWED_IMAGE_MIMES)) {
+                return response()->json(['status' => 'error', 'message' => 'Tipe file logo footer tidak valid.'], 422);
+            }
+
+            $platformData = [];
+            $fields = ['no_kontrak', 'judul', 'username', 'perusahaan', 'nama', 'email', 'no_hp', 'lokasi', 'domain'];
+            foreach ($fields as $field) {
+                if ($request->has($field)) {
+                    $platformData[$field] = $this->sanitizeInput($request->input($field));
+                }
+            }
+            if ($request->has('coin_user')) $platformData['coin_user'] = (int) $request->input('coin_user');
+            if ($request->has('kuota_user')) $platformData['kuota_user'] = (int) $request->input('kuota_user');
+            if ($request->has('tgl_mulai')) $platformData['tgl_mulai'] = $request->input('tgl_mulai');
+            if ($request->has('tgl_akhir')) $platformData['tgl_akhir'] = $request->input('tgl_akhir');
 
             // Handle file uploads with replacement
             if ($request->hasFile('file')) {
-                // Delete old file if exists
                 if ($platform->file && Storage::disk('public')->exists($platform->file)) {
                     Storage::disk('public')->delete($platform->file);
                 }
-                $filePath = $request->file('file')->store('platforms/' . $platform->uuid . '/documents', 'public');
-                $platformData['file'] = $filePath;
+                $platformData['file'] = $request->file('file')->store('platforms/' . $platform->uuid . '/documents', 'public');
             }
-
             if ($request->hasFile('logo')) {
-                // Delete old logo if exists
                 if ($platform->logo && Storage::disk('public')->exists($platform->logo)) {
                     Storage::disk('public')->delete($platform->logo);
                 }
-                $logoPath = $request->file('logo')->store('platforms/' . $platform->uuid . '/logos', 'public');
-                $platformData['logo'] = $logoPath;
+                $platformData['logo'] = $request->file('logo')->store('platforms/' . $platform->uuid . '/logos', 'public');
             }
-
             if ($request->hasFile('logo_footer')) {
-                // Delete old logo footer if exists
                 if ($platform->logo_footer && Storage::disk('public')->exists($platform->logo_footer)) {
                     Storage::disk('public')->delete($platform->logo_footer);
                 }
-                $logoFooterPath = $request->file('logo_footer')->store('platforms/' . $platform->uuid . '/logos', 'public');
-                $platformData['logo_footer'] = $logoFooterPath;
+                $platformData['logo_footer'] = $request->file('logo_footer')->store('platforms/' . $platform->uuid . '/logos', 'public');
             }
 
             $platform->update($platformData);
 
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Platform updated successfully',
-                'data' => $platform
-            ]);
+            Log::info('Platform updated', ['user_id' => Auth::id(), 'platform_uuid' => $uuid, 'changes' => array_keys($platformData)]);
 
+            return response()->json(['status' => 'success', 'message' => 'Platform berhasil diupdate.', 'data' => $platform]);
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Failed to update platform: ' . $e->getMessage());
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Gagal mengupdate platform. Silakan coba lagi.'
-            ], 500);
+            Log::error('Failed to update platform: ' . $e->getMessage(), ['user_id' => Auth::id(), 'uuid' => $uuid]);
+            return response()->json(['status' => 'error', 'message' => 'Gagal mengupdate platform.'], 500);
         }
     }
 
-    /**
-     * Delete a platform
-     */
+
     public function destroy($uuid)
     {
+        if (!$this->checkSuperadminAccess()) {
+            return $this->unauthorizedResponse();
+        }
+        if (!$this->isValidUuid($uuid)) {
+            return response()->json(['status' => 'error', 'message' => 'Format UUID tidak valid.'], 400);
+        }
+
         try {
             $platform = Platformpreneur::where('uuid', $uuid)->first();
-
             if (!$platform) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Platform not found'
-                ], 404);
+                return response()->json(['status' => 'error', 'message' => 'Platform tidak ditemukan.'], 404);
             }
+
+            $platformName = $platform->judul;
 
             // Delete associated files
             if ($platform->file && Storage::disk('public')->exists($platform->file)) {
@@ -281,17 +308,12 @@ class PlatformManagementController extends Controller
 
             $platform->delete();
 
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Platform deleted successfully'
-            ]);
+            Log::info('Platform deleted', ['user_id' => Auth::id(), 'platform_uuid' => $uuid, 'name' => $platformName]);
 
+            return response()->json(['status' => 'success', 'message' => 'Platform berhasil dihapus.']);
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Failed to delete platform: ' . $e->getMessage());
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Gagal menghapus platform. Silakan coba lagi.'
-            ], 500);
+            Log::error('Failed to delete platform: ' . $e->getMessage(), ['user_id' => Auth::id(), 'uuid' => $uuid]);
+            return response()->json(['status' => 'error', 'message' => 'Gagal menghapus platform.'], 500);
         }
     }
 }
