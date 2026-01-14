@@ -149,6 +149,7 @@ class SettingTokoController extends Controller
                         'phone' => $store->phone,
                         'logo' => $store->logo,
                         'description' => $store->description ?? null,
+                        'alamat_toko' => $store->alamat_toko ?? null,
                     ],
                     'settings' => $settings,
                     'slides' => $slides,
