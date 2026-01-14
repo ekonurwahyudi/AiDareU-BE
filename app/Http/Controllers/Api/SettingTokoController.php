@@ -99,6 +99,9 @@ class SettingTokoController extends Controller
                 ]);
             }
 
+            // Get social media data for the store
+            $socialMedia = \App\Models\SocialMedia::where('store_uuid', $storeUuid)->first();
+
             // Get products
             $products = \App\Models\Product::where('uuid_store', $storeUuid)
                 ->where('status_produk', 'active')
@@ -161,6 +164,13 @@ class SettingTokoController extends Controller
                         'logo_footer' => $platformpreneur->logo_footer,
                         'domain' => $platformpreneur->domain,
                         'cart' => $platformpreneur->cart ?? true, // default true if not set
+                    ] : null,
+                    'social_media' => $socialMedia ? [
+                        'instagram_url' => $socialMedia->instagram_url,
+                        'shopee_url' => $socialMedia->shopee_url,
+                        'tokopedia_url' => $socialMedia->tokopedia_url,
+                        'tiktok_url' => $socialMedia->tiktok_url,
+                        'facebook_url' => $socialMedia->facebook_url,
                     ] : null,
                 ]
             ]);
