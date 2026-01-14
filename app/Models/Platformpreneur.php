@@ -46,6 +46,7 @@ class Platformpreneur extends Model
         'coin_user',
         'kuota_user',
         'domain',
+        'cart',
         'tgl_mulai',
         'tgl_akhir',
     ];
@@ -60,6 +61,7 @@ class Platformpreneur extends Model
         'tgl_akhir' => 'date',
         'coin_user' => 'integer',
         'kuota_user' => 'integer',
+        'cart' => 'boolean',
     ];
 
     /**
@@ -70,6 +72,7 @@ class Platformpreneur extends Model
     protected $attributes = [
         'coin_user' => 0,
         'kuota_user' => 0,
+        'cart' => false,
     ];
 
     /**

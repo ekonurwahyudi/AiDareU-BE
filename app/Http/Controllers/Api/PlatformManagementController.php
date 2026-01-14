@@ -51,6 +51,12 @@ class PlatformManagementController extends Controller
 
             $platforms = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
+            // Add sisa_kuota calculation for each platform
+            foreach ($platforms as $platform) {
+                $usedQuota = \App\Models\User::where('info_dari', $platform->username)->count();
+                $platform->sisa_kuota = $platform->kuota_user - $usedQuota;
+            }
+
             Log::info('Platform list accessed', ['user_id' => Auth::id(), 'search' => $search, 'total' => $platforms->total()]);
 
             return response()->json(['status' => 'success', 'data' => $platforms]);
@@ -98,6 +104,7 @@ class PlatformManagementController extends Controller
                 'coin_user' => 'required|integer|min:0|max:999999999',
                 'kuota_user' => 'required|integer|min:0|max:999999999',
                 'domain' => 'required|string|max:255|unique:platformpreneur,domain',
+                'cart' => 'nullable|boolean',
                 'tgl_mulai' => 'required|date',
                 'tgl_akhir' => 'required|date|after:tgl_mulai'
             ]);
@@ -129,6 +136,7 @@ class PlatformManagementController extends Controller
                 'coin_user' => (int) $request->input('coin_user'),
                 'kuota_user' => (int) $request->input('kuota_user'),
                 'domain' => $this->sanitizeInput($request->input('domain')),
+                'cart' => $request->input('cart', false),
                 'tgl_mulai' => $request->input('tgl_mulai'),
                 'tgl_akhir' => $request->input('tgl_akhir')
             ];
@@ -183,6 +191,7 @@ class PlatformManagementController extends Controller
                 'coin_user' => 'sometimes|required|integer|min:0|max:999999999',
                 'kuota_user' => 'sometimes|required|integer|min:0|max:999999999',
                 'domain' => 'sometimes|required|string|max:255|unique:platformpreneur,domain,' . $platform->id,
+                'cart' => 'nullable|boolean',
                 'tgl_mulai' => 'sometimes|required|date',
                 'tgl_akhir' => 'sometimes|required|date|after:tgl_mulai'
             ]);
@@ -211,6 +220,7 @@ class PlatformManagementController extends Controller
             }
             if ($request->has('coin_user')) $platformData['coin_user'] = (int) $request->input('coin_user');
             if ($request->has('kuota_user')) $platformData['kuota_user'] = (int) $request->input('kuota_user');
+            if ($request->has('cart')) $platformData['cart'] = (bool) $request->input('cart');
             if ($request->has('tgl_mulai')) $platformData['tgl_mulai'] = $request->input('tgl_mulai');
             if ($request->has('tgl_akhir')) $platformData['tgl_akhir'] = $request->input('tgl_akhir');
 
