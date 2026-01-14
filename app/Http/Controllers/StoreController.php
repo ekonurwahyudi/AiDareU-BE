@@ -113,6 +113,7 @@ class StoreController extends Controller
                     'provinsi' => $store->provinsi,
                     'kota' => $store->kota,
                     'kecamatan' => $store->kecamatan,
+                    'alamat_toko' => $store->alamat_toko,
                     'province' => $store->provinsi, // Alias for frontend compatibility
                     'city' => $store->kota,         // Alias for frontend compatibility
                     'district' => $store->kecamatan, // Alias for frontend compatibility
@@ -406,6 +407,7 @@ class StoreController extends Controller
                         'provinsi' => $store->provinsi,
                         'kota' => $store->kota,
                         'kecamatan' => $store->kecamatan,
+                        'alamat_toko' => $store->alamat_toko,
                         'is_active' => $store->is_active,
                         'url' => 'https://' . $store->subdomain . '.aidareu.com',
                         'created_at' => $store->created_at,
@@ -455,7 +457,8 @@ class StoreController extends Controller
             'deskripsi_toko' => 'sometimes|required|string|min:10|max:1000',
             'provinsi' => 'sometimes|nullable|string|max:100',
             'kota' => 'sometimes|nullable|string|max:100',
-            'kecamatan' => 'sometimes|nullable|string|max:100'
+            'kecamatan' => 'sometimes|nullable|string|max:100',
+            'alamat_toko' => 'sometimes|nullable|string|max:500'
         ]);
 
         if ($validator->fails()) {
@@ -550,6 +553,9 @@ class StoreController extends Controller
             if ($request->has('kecamatan')) {
                 $updateData['kecamatan'] = $request->kecamatan;
             }
+            if ($request->has('alamat_toko')) {
+                $updateData['alamat_toko'] = $request->alamat_toko;
+            }
 
             $store->update($updateData);
 
@@ -566,6 +572,7 @@ class StoreController extends Controller
                     'provinsi' => $store->provinsi,
                     'kota' => $store->kota,
                     'kecamatan' => $store->kecamatan,
+                    'alamat_toko' => $store->alamat_toko,
                     'status' => $store->status,
                     'is_published' => $store->is_published,
                     'url' => 'https://' . $store->subdomain . '.aidareu.com'

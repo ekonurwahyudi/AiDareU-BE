@@ -54,6 +54,7 @@ class Store extends Model
         'provinsi',
         'kota',
         'kecamatan',
+        'alamat_toko',
         // Legacy fields for backward compatibility
         'domain',
         'alamat',
