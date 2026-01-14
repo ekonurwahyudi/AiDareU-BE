@@ -160,6 +160,7 @@ class SettingTokoController extends Controller
                         'logo' => $platformpreneur->logo,
                         'logo_footer' => $platformpreneur->logo_footer,
                         'domain' => $platformpreneur->domain,
+                        'cart' => $platformpreneur->cart ?? true, // default true if not set
                     ] : null,
                 ]
             ]);
