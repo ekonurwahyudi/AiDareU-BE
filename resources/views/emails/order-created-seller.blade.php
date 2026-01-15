@@ -223,7 +223,16 @@
                     $subtotal = $order->detailOrders->sum(function($detail) {
                         return $detail->quantity * $detail->price;
                     });
-                    $ongkir = $order->total_harga - $subtotal;
+
+                    // Parse voucher data if exists
+                    $voucherData = null;
+                    $voucherDiscount = 0;
+                    if ($order->voucher) {
+                        $voucherData = is_string($order->voucher) ? json_decode($order->voucher, true) : $order->voucher;
+                        $voucherDiscount = $voucherData['diskon_terapkan'] ?? 0;
+                    }
+
+                    $ongkir = ($order->total_harga + $voucherDiscount) - $subtotal;
                 @endphp
                 <div class="total-row">
                     <span>Subtotal:</span>
@@ -233,6 +242,12 @@
                     <span>Ongkir:</span>
                     <span>Rp. {{ number_format($ongkir, 0, ',', '.') }}</span>
                 </div>
+                @if($voucherData && $voucherDiscount > 0)
+                <div class="total-row" style="color: #16a34a;">
+                    <span>Diskon Voucher ({{ $voucherData['kode_voucher'] ?? '' }}):</span>
+                    <span>- Rp. {{ number_format($voucherDiscount, 0, ',', '.') }}</span>
+                </div>
+                @endif
                 <div class="total-row grand-total">
                     <span>TOTAL PENDAPATAN:</span>
                     <span>Rp. {{ number_format($order->total_harga, 0, ',', '.') }}</span>

@@ -8,6 +8,7 @@ use App\Models\DetailOrder;
 use App\Models\Store;
 use App\Models\BankAccount;
 use App\Models\User;
+use App\Models\Voucher;
 use App\Mail\OrderCreated;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
@@ -70,11 +71,25 @@ class CheckoutController extends Controller
                 'uuid_store' => $orderData['uuidStore']
             ]);
 
+            // Handle voucher if provided
+            $voucherData = null;
+            if (isset($orderData['voucher']) && $orderData['voucher']) {
+                $voucherData = $orderData['voucher'];
+
+                // Increment voucher usage
+                if (isset($voucherData['uuid'])) {
+                    $voucher = Voucher::where('uuid', $voucherData['uuid'])->first();
+                    if ($voucher) {
+                        $voucher->increment('kuota_terpakai');
+                    }
+                }
+            }
+
             // Create order (nomor_order will be auto-generated)
             $order = Order::create([
                 'uuid_store' => $orderData['uuidStore'],
                 'uuid_customer' => $customer->uuid,
-                'voucher' => $orderData['voucher'] ?? null,
+                'voucher' => $voucherData ? json_encode($voucherData) : null,
                 'total_harga' => $orderData['totalHarga'],
                 'ekspedisi' => $orderData['ekspedisi'],
                 'estimasi_tiba' => $orderData['estimasiTiba'] ?? null,
