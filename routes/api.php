@@ -32,6 +32,7 @@ use App\Http\Controllers\AIMergePhotoController;
 use App\Http\Controllers\AIFashionPhotoController;
 use App\Http\Controllers\CoinTransactionController;
 use App\Http\Controllers\Api\HelpdeskController;
+use App\Http\Controllers\Api\VoucherController;
 
 /*
 |--------------------------------------------------------------------------
@@ -218,6 +219,16 @@ Route::middleware(['throttle:api', 'web', 'auth:web,sanctum'])->group(function (
     Route::post('/management/platforms', [PlatformManagementController::class, 'store']);
     Route::put('/management/platforms/{uuid}', [PlatformManagementController::class, 'update']);
     Route::delete('/management/platforms/{uuid}', [PlatformManagementController::class, 'destroy']);
+});
+
+// Tokoku: Voucher Management (protected - per store)
+Route::middleware(['throttle:api', 'web', 'auth:web,sanctum'])->group(function () {
+    Route::get('/tokoku/vouchers', [VoucherController::class, 'index']);
+    Route::get('/tokoku/vouchers/{uuid}', [VoucherController::class, 'show']);
+    Route::post('/tokoku/vouchers', [VoucherController::class, 'store']);
+    Route::put('/tokoku/vouchers/{uuid}', [VoucherController::class, 'update']);
+    Route::delete('/tokoku/vouchers/{uuid}', [VoucherController::class, 'destroy']);
+    Route::post('/tokoku/vouchers/validate', [VoucherController::class, 'validate']);
 });
 
 // Public: Products API (rate limited)
