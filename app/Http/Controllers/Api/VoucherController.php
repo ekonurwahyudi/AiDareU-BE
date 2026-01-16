@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Voucher;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
@@ -260,9 +261,18 @@ class VoucherController extends Controller
                 ], 422);
             }
 
+            // Search voucher case-insensitive
             $voucher = Voucher::where('uuid_store', $request->uuid_store)
-                             ->where('kode_voucher', $request->kode_voucher)
+                             ->whereRaw('UPPER(kode_voucher) = ?', [strtoupper($request->kode_voucher)])
                              ->first();
+
+            // Log the search for debugging
+            Log::info('Voucher search', [
+                'uuid_store' => $request->uuid_store,
+                'kode_voucher' => $request->kode_voucher,
+                'kode_voucher_upper' => strtoupper($request->kode_voucher),
+                'found' => $voucher ? true : false
+            ]);
 
             if (!$voucher) {
                 return response()->json([
@@ -272,9 +282,41 @@ class VoucherController extends Controller
             }
 
             if (!$voucher->isValid()) {
+                // Log detail untuk debugging
+                Log::info('Voucher validation failed', [
+                    'kode_voucher' => $voucher->kode_voucher,
+                    'status' => $voucher->status,
+                    'tgl_mulai' => $voucher->tgl_mulai,
+                    'tgl_berakhir' => $voucher->tgl_berakhir,
+                    'kuota' => $voucher->kuota,
+                    'kuota_terpakai' => $voucher->kuota_terpakai,
+                    'today' => now()->toDateString()
+                ]);
+
+                // Return specific error message
+                $today = now()->startOfDay();
+                $tglMulai = $voucher->tgl_mulai instanceof Carbon
+                    ? $voucher->tgl_mulai->startOfDay()
+                    : Carbon::parse($voucher->tgl_mulai)->startOfDay();
+                $tglBerakhir = $voucher->tgl_berakhir instanceof Carbon
+                    ? $voucher->tgl_berakhir->startOfDay()
+                    : Carbon::parse($voucher->tgl_berakhir)->startOfDay();
+
+                if ($voucher->status !== 'active') {
+                    $message = 'Voucher tidak aktif';
+                } elseif ($tglMulai->gt($today)) {
+                    $message = 'Voucher belum berlaku. Berlaku mulai ' . $tglMulai->format('d/m/Y');
+                } elseif ($tglBerakhir->lt($today)) {
+                    $message = 'Voucher sudah expired sejak ' . $tglBerakhir->format('d/m/Y');
+                } elseif ($voucher->kuota_terpakai >= $voucher->kuota) {
+                    $message = 'Kuota voucher sudah habis';
+                } else {
+                    $message = 'Voucher tidak valid';
+                }
+
                 return response()->json([
                     'success' => false,
-                    'message' => 'Voucher tidak valid atau sudah expired'
+                    'message' => $message
                 ], 400);
             }
 
