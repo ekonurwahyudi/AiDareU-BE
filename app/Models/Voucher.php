@@ -68,21 +68,6 @@ class Voucher extends Model
             ? $this->tgl_berakhir->copy()->startOfDay()
             : Carbon::parse($this->tgl_berakhir)->startOfDay();
 
-        // Log for debugging
-        \Log::info('Voucher isValid check', [
-            'kode' => $this->kode_voucher,
-            'status' => $this->status,
-            'today' => $today->toDateString(),
-            'tgl_mulai' => $tglMulai->toDateString(),
-            'tgl_berakhir' => $tglBerakhir->toDateString(),
-            'kuota' => $this->kuota,
-            'kuota_terpakai' => $this->kuota_terpakai,
-            'is_active' => $this->status === 'active',
-            'mulai_ok' => $tglMulai->lte($today),
-            'berakhir_ok' => $tglBerakhir->gte($today),
-            'kuota_ok' => $this->kuota_terpakai < $this->kuota
-        ]);
-
         return $this->status === 'active'
             && $tglMulai->lte($today)
             && $tglBerakhir->gte($today)

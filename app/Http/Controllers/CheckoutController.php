@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\Voucher;
 use App\Mail\OrderCreated;
 use App\Services\NotificationService;
+use App\Http\Controllers\Api\VoucherController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -71,18 +72,42 @@ class CheckoutController extends Controller
                 'uuid_store' => $orderData['uuidStore']
             ]);
 
-            // Handle voucher if provided
+            // Handle voucher if provided - with re-validation and race condition protection
             $voucherData = null;
-            if (isset($orderData['voucher']) && $orderData['voucher']) {
-                $voucherData = $orderData['voucher'];
+            $voucherDiskon = 0;
+            if (isset($orderData['voucher']) && $orderData['voucher'] && isset($orderData['voucher']['uuid'])) {
+                // Calculate subtotal for voucher validation
+                $subtotal = array_reduce($items, function ($sum, $item) {
+                    return $sum + ($item['price'] * $item['quantity']);
+                }, 0);
 
-                // Increment voucher usage
-                if (isset($voucherData['uuid'])) {
-                    $voucher = Voucher::where('uuid', $voucherData['uuid'])->first();
-                    if ($voucher) {
-                        $voucher->increment('kuota_terpakai');
-                    }
+                // Security: Re-validate voucher at checkout with database locking
+                $voucherResult = VoucherController::useVoucherAtCheckout(
+                    $orderData['voucher']['uuid'],
+                    $orderData['uuidStore'],
+                    $subtotal
+                );
+
+                if (!$voucherResult['success']) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => $voucherResult['message']
+                    ], 400);
                 }
+
+                // Use server-calculated discount (don't trust client value)
+                $voucher = $voucherResult['voucher'];
+                $voucherDiskon = $voucherResult['diskon'];
+
+                $voucherData = [
+                    'uuid' => $voucher->uuid,
+                    'kode_voucher' => $voucher->kode_voucher,
+                    'jenis_voucher' => $voucher->jenis_voucher,
+                    'tipe_diskon' => $voucher->tipe_diskon,
+                    'nilai_diskon' => $voucher->nilai_diskon,
+                    'diskon_terapkan' => $voucherDiskon
+                ];
             }
 
             // Create order (nomor_order will be auto-generated)
