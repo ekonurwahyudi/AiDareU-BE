@@ -221,6 +221,11 @@ Route::middleware(['throttle:api', 'web', 'auth:web,sanctum'])->group(function (
     Route::delete('/management/platforms/{uuid}', [PlatformManagementController::class, 'destroy']);
 });
 
+// Public: Voucher Validation (no auth required - for checkout)
+Route::middleware('throttle:api')->group(function () {
+    Route::post('/tokoku/vouchers/validate', [VoucherController::class, 'validate']);
+});
+
 // Tokoku: Voucher Management (protected - per store)
 Route::middleware(['throttle:api', 'web', 'auth:web,sanctum'])->group(function () {
     Route::get('/tokoku/vouchers', [VoucherController::class, 'index']);
@@ -228,7 +233,6 @@ Route::middleware(['throttle:api', 'web', 'auth:web,sanctum'])->group(function (
     Route::post('/tokoku/vouchers', [VoucherController::class, 'store']);
     Route::put('/tokoku/vouchers/{uuid}', [VoucherController::class, 'update']);
     Route::delete('/tokoku/vouchers/{uuid}', [VoucherController::class, 'destroy']);
-    Route::post('/tokoku/vouchers/validate', [VoucherController::class, 'validate']);
 });
 
 // Public: Products API (rate limited)
