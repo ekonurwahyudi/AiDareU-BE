@@ -37,20 +37,36 @@ class VoucherController extends Controller
      */
     private function userHasStoreAccess($uuidStore)
     {
-        $user = Auth::user();
-        if (!$user) {
+        try {
+            $user = Auth::user();
+            if (!$user) {
+                return false;
+            }
+
+            // Check if user owns the store (user_id matches user's uuid)
+            // or has access through user_roles relationship
+            $store = Store::where('uuid', $uuidStore)->first();
+
+            if (!$store) {
+                return false;
+            }
+
+            // Check direct ownership
+            if ($store->user_id === $user->uuid) {
+                return true;
+            }
+
+            // Check through user_roles table
+            $hasRole = DB::table('user_roles')
+                ->where('store_id', $store->id)
+                ->where('user_id', $user->id)
+                ->exists();
+
+            return $hasRole;
+        } catch (\Exception $e) {
+            Log::error('Error checking store access: ' . $e->getMessage());
             return false;
         }
-
-        // Check if user owns the store or has access through stores relationship
-        return Store::where('uuid', $uuidStore)
-            ->where(function ($query) use ($user) {
-                $query->where('uuid_user', $user->uuid)
-                    ->orWhereHas('users', function ($q) use ($user) {
-                        $q->where('users.uuid', $user->uuid);
-                    });
-            })
-            ->exists();
     }
 
     /**
